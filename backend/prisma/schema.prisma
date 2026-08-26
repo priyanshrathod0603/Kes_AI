@@ -1,0 +1,107 @@
+generator client {
+  provider           = "prisma-client-js"
+  prettierFormatter   = "prettier"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+model SchoolClass {
+  id        String   @id @default(uuid())
+  name      String
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  subjects  Subject[]
+  documents Document[]
+
+  @@index([name])
+}
+
+model Subject {
+  id          String   @id @default(uuid())
+  name        String
+  classId     String
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  schoolClass SchoolClass @relation(fields: [classId], references: [id])
+  chapters    Chapter[]
+  documents   Document[]
+
+  @@index([name])
+  @@index([classId])
+}
+
+model Chapter {
+  id          String   @id @default(uuid())
+  name        String
+  description String?
+  subjectId   String
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  subject   Subject  @relation(fields: [subjectId], references: [id])
+  topics    Topic[]
+  documents Document[]
+
+  @@index([name])
+  @@index([subjectId])
+}
+
+model Topic {
+  id        String   @id @default(uuid())
+  name      String
+  chapterId String
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  chapter Chapter @relation(fields: [chapterId], references: [id])
+  documents Document[]
+
+  @@index([name])
+  @@index([chapterId])
+}
+
+model Document {
+  id           String   @id @default(uuid())
+  title        String
+  fileName     String
+  filePath     String
+  fileType     String
+  fileSize     Int
+  documentType String   @default("STUDY_MATERIAL")
+  processed    Boolean  @default(false)
+  extractedText String?
+  
+  // Extraction tracking fields
+  extractionStatus String   @default("PENDING")
+  extractionError  String?
+  extractedAt      DateTime?
+  pageCount        Int?
+  characterCount   Int?
+
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  schoolClassId String?
+  subjectId     String?
+  chapterId     String?
+  topicId       String?
+
+  schoolClass SchoolClass? @relation(fields: [schoolClassId], references: [id])
+  subject     Subject?     @relation(fields: [subjectId], references: [id])
+  chapter     Chapter?      @relation(fields: [chapterId], references: [id])
+  topic       Topic?         @relation(fields: [topicId], references: [id])
+
+  @@index([title])
+  @@index([fileType])
+  @@index([documentType])
+  @@index([schoolClassId])
+  @@index([subjectId])
+  @@index([chapterId])
+  @@index([topicId])
+  @@index([extractionStatus])
+}
