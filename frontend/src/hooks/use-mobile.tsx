@@ -1,25 +1,23 @@
 import { useEffect, useState } from 'react'
 
-export function useMobile(breakpoint = 768) {
-  const [isMobile, setIsMobile] = useState(false)
-  const [isTablet, setIsTablet] = useState(false)
-  const [isDesktop, setIsDesktop] = useState(false)
+export function useIsMobile(breakpoint = 1024) {
+  const [isMobile, setIsMobile] = useState<boolean>(() =>
+    typeof window !== 'undefined' ? window.innerWidth < breakpoint : false
+  )
 
   useEffect(() => {
-    const checkScreenSize = () => {
-      const width = window.innerWidth
-      setIsMobile(width < breakpoint)
-      setIsTablet(width >= breakpoint && width < 1024)
-      setIsDesktop(width >= 1024)
-    }
-
-    checkScreenSize()
-    window.addEventListener('resize', checkScreenSize)
-
-    return () => window.removeEventListener('resize', checkScreenSize)
+    const handler = () => setIsMobile(window.innerWidth < breakpoint)
+    handler()
+    window.addEventListener('resize', handler)
+    return () => window.removeEventListener('resize', handler)
   }, [breakpoint])
 
-  return { isMobile, isTablet, isDesktop }
+  return isMobile
+}
+
+/** True when the viewport is at least 1024px wide (desktop / lg breakpoint). */
+export function useIsDesktop(breakpoint = 1024) {
+  return !useIsMobile(breakpoint)
 }
 
 export function useMediaQuery(query: string) {

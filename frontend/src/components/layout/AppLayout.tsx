@@ -2,38 +2,34 @@
 
 import { useState } from 'react'
 import { Outlet } from 'react-router-dom'
-import { useMobile } from '@/hooks'
 import { Sidebar } from './Sidebar'
 import { TopNavbar } from './TopNavbar'
-import { Toaster } from '@/components/ui/toaster'
+import { useIsDesktop } from '@/hooks/use-mobile'
 import { cn } from '@/lib/utils'
 
-interface AppLayoutProps {
-  className?: string
-}
-
-export function AppLayout({ className }: AppLayoutProps) {
-  const { isMobile, isTablet } = useMobile()
+export function AppLayout() {
+  const isDesktop = useIsDesktop()
   const [sidebarOpen, setSidebarOpen] = useState(false)
 
   return (
-    <div className={cn('min-h-screen bg-background', className)}>
-      <Sidebar isOpen={sidebarOpen} onClose={() => setSidebarOpen(false)} isMobile={isMobile} />
-      <TopNavbar onMenuClick={() => setSidebarOpen(true)} isMobile={isMobile} />
-      <main
-        className={cn(
-          'transition-all duration-300',
-          'lg:ml-72',
-          isMobile ? 'pt-16' : 'pt-0'
-        )}
-        id="main-content"
-        role="main"
-      >
-        <div className="p-4 md:p-6 lg:p-8">
-          <Outlet />
-        </div>
-      </main>
-      <Toaster />
+    <div className="min-h-screen bg-background text-foreground">
+      <Sidebar
+        isOpen={isDesktop ? true : sidebarOpen}
+        onClose={() => setSidebarOpen(false)}
+        isMobile={!isDesktop}
+      />
+
+      <div className={cn('flex min-h-screen flex-col', isDesktop && 'lg:ml-72')}>
+        <TopNavbar
+          onMenuClick={() => setSidebarOpen(true)}
+          isMobile={!isDesktop}
+        />
+        <main id="main-content" role="main" className="flex-1">
+          <div className="p-4 sm:p-6 lg:p-8 max-w-7xl mx-auto w-full">
+            <Outlet />
+          </div>
+        </main>
+      </div>
     </div>
   )
 }

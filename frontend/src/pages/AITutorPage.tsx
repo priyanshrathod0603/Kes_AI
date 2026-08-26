@@ -1,524 +1,534 @@
 'use client'
 
-import { useState, useRef, useEffect, useCallback } from 'react'
+import { useEffect, useRef, useState, useCallback, type FormEvent, type KeyboardEvent } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
-import { useForm } from 'react-hook-form'
-import { Bot, Send, Copy, RotateCcw, Lightbulb, Sparkles, HelpCircle, FileText, X, ChevronLeft, ChevronRight, Loader2, Paperclip, Mic, Settings, BookOpen, GraduationCap, Layers, ArrowUpRight } from 'lucide-react'
+import {
+  Send,
+  Sparkles,
+  Copy,
+  Check,
+  RotateCcw,
+  RefreshCcw,
+  Trash2,
+  Bot,
+  User as UserIcon,
+  AlertCircle,
+  Lightbulb,
+  GraduationCap,
+  BookOpen,
+  X,
+  Loader2,
+} from 'lucide-react'
 import { Button } from '@/components/ui/button'
-import { Input } from '@/components/ui/input'
-import { Textarea } from '@/components/ui/textarea'
 import { Card } from '@/components/ui/card'
-import { Badge } from '@/components/ui/badge'
-import { Avatar } from '@/components/ui/avatar'
-import { ScrollArea } from '@/components/ui/scroll-area'
-import { Separator } from '@/components/ui/separator'
-import { DropdownMenu, DropdownMenuTrigger, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel, DropdownMenuSeparator } from '@/components/ui/dropdown-menu'
+import { PageHeader, ErrorState, EmptyState } from '@/components/feedback/States'
+import { useAIChat, useClasses, useSubjects, useChapters, useTopics } from '@/hooks'
 import { cn } from '@/lib/utils'
-import { useAIChat } from '@/hooks'
 import { QUICK_PROMPTS } from '@/lib/constants'
-import { formatTime } from '@/lib/utils'
-import { marked } from 'marked'
-
-marked.setOptions({
-  breaks: true,
-  gfm: true,
-})
+import type { ApiError } from '@/types'
 
 interface Message {
   id: string
   role: 'user' | 'assistant'
   content: string
-  timestamp: Date
-  isStreaming?: boolean
+  timestamp: number
+  pending?: boolean
+  error?: string
 }
 
-const initialMessages: Message[] = [
-  {
-    id: 'welcome',
-    role: 'assistant',
-    content: `Hello! I'm KESH AI 👋 I'm here to help you learn and understand any topic you're studying.
+const STORAGE_KEY = 'kes.ai.messages.v1'
 
-**What can I help you with?**
-- 📚 **Explain concepts** - "Explain photosynthesis in simple terms"
-- 💡 **Give examples** - "Show me a real-world example of quadratic equations"
-- 🎯 **Practice & quiz** - "Quiz me on fractions" or "Give me practice problems"
-- 📝 **Summarize** - "Summarize Chapter 3 of Science"
-- 🔍 **Step-by-step help** - "Help me solve this math problem"
+function loadMessages(): Message[] | null {
+  try {
+    const raw = localStorage.getItem(STORAGE_KEY)
+    if (!raw) return null
+    const parsed = JSON.parse(raw)
+    if (!Array.isArray(parsed)) return null
+    return parsed as Message[]
+  } catch {
+    return null
+  }
+}
 
-**Quick tips:**
-- Select your class, subject, and topic above for more relevant answers
-- Use the quick prompts below for common tasks
+function saveMessages(messages: Message[]) {
+  try {
+    // Don't persist pending/error states
+    const cleaned = messages.filter((m) => !m.pending && !m.error)
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(cleaned))
+  } catch {
+    /* ignore quota errors */
+  }
+}
 
-What would you like to learn today?`,
-    timestamp: new Date(),
-  },
-]
+function newId() {
+  return `m-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`
+}
 
-const contextOptions = {
-  class: [
-    { value: '', label: 'Select Class' },
-    { value: '5', label: 'Class 5' },
-    { value: '6', label: 'Class 6' },
-    { value: '7', label: 'Class 7' },
-    { value: '8', label: 'Class 8' },
-    { value: '9', label: 'Class 9' },
-    { value: '10', label: 'Class 10' },
-    { value: '11', label: 'Class 11' },
-    { value: '12', label: 'Class 12' },
-  ],
-  subject: [
-    { value: '', label: 'Select Subject' },
-    { value: 'math', label: 'Mathematics' },
-    { value: 'science', label: 'Science' },
-    { value: 'english', label: 'English' },
-    { value: 'social', label: 'Social Science' },
-    { value: 'hindi', label: 'Hindi' },
-    { value: 'computer', label: 'Computer Science' },
-  ],
-  chapter: [
-    { value: '', label: 'Select Chapter' },
-    { value: '1', label: 'Chapter 1' },
-    { value: '2', label: 'Chapter 2' },
-    { value: '3', label: 'Chapter 3' },
-    { value: '4', label: 'Chapter 4' },
-  ],
-  topic: [
-    { value: '', label: 'Select Topic' },
-    { value: '1', label: 'Topic 1' },
-    { value: '2', label: 'Topic 2' },
-    { value: '3', label: 'Topic 3' },
-  ],
+function formatTime(ts: number) {
+  return new Date(ts).toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit' })
+}
+
+function getErrorMessage(err: unknown): string {
+  if (!err) return 'Unknown error'
+  if (err instanceof Error) return err.message
+  if (typeof err === 'object' && err !== null) {
+    const apiErr = err as ApiError
+    return apiErr.message || 'Unknown error'
+  }
+  return String(err)
 }
 
 export function AITutorPage() {
-  const [messages, setMessages] = useState<Message[]>(initialMessages)
-  const [context, setContext] = useState({ class: '', subject: '', chapter: '', topic: '' })
-  const [isSidebarOpen, setIsSidebarOpen] = useState(false)
-  const [isContextPanelOpen, setIsContextPanelOpen] = useState(false)
-  const [showQuickPrompts, setShowQuickPrompts] = useState(true)
-  const messagesEndRef = useRef<HTMLDivElement>(null)
+  const [messages, setMessages] = useState<Message[]>(() => {
+    return (
+      loadMessages() ?? [
+        {
+          id: 'welcome',
+          role: 'assistant',
+          content:
+            "Hi, I'm KES — your AI tutor.\n\nAsk me to explain a concept, give examples, create a practice quiz, or summarise a topic. Pick a class, subject, chapter, or topic for a more relevant answer, then type your question below.",
+          timestamp: Date.now(),
+        },
+      ]
+    )
+  })
+  const [input, setInput] = useState('')
+  const [copiedId, setCopiedId] = useState<string | null>(null)
+  const [classId, setClassId] = useState('')
+  const [subjectId, setSubjectId] = useState('')
+  const [chapterId, setChapterId] = useState('')
+  const [topicId, setTopicId] = useState('')
+
+  const { data: classes = [], isLoading: classesLoading, error: classesError } = useClasses()
+  const { data: subjects = [] } = useSubjects(classId ? { classId } : undefined)
+  const { data: chapters = [] } = useChapters(subjectId ? { subjectId } : undefined)
+  const { data: topics = [] } = useTopics(chapterId ? { chapterId } : undefined)
+
+  const ai = useAIChat()
+  const scrollRef = useRef<HTMLDivElement>(null)
   const textareaRef = useRef<HTMLTextAreaElement>(null)
 
-  const { sendMessage, isSending, error } = useAIChat()
-
-  const {
-    register,
-    handleSubmit,
-    watch,
-    reset,
-    formState: { errors },
-  } = useForm({
-    defaultValues: { message: '' },
-  })
-
-  const message = watch('message', '')
-
-  const scrollToBottom = useCallback(() => {
-    messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' })
-  }, [])
-
   useEffect(() => {
-    scrollToBottom()
-  }, [messages, scrollToBottom])
+    saveMessages(messages)
+    // Scroll to bottom on update
+    requestAnimationFrame(() => {
+      scrollRef.current?.scrollTo({ top: scrollRef.current.scrollHeight, behavior: 'smooth' })
+    })
+  }, [messages])
 
-  const handleSendMessage = async (data?: { message: string } | string) => {
-    const text = typeof data === 'string' ? data : data?.message || message.trim()
-    if (!text || isSending) return
+  const buildSystemPrompt = useCallback(() => {
+    const className = classes.find((c) => c.id === classId)?.name
+    const subjectName = subjects.find((s) => s.id === subjectId)?.name
+    const chapterName = chapters.find((c) => c.id === chapterId)?.name
+    const topicName = topics.find((t) => t.id === topicId)?.name
+    const bits: string[] = []
+    if (className) bits.push(`Class: ${className}`)
+    if (subjectName) bits.push(`Subject: ${subjectName}`)
+    if (chapterName) bits.push(`Chapter: ${chapterName}`)
+    if (topicName) bits.push(`Topic: ${topicName}`)
+    const context = bits.length ? `Current focus — ${bits.join(' • ')}.` : ''
+    return `You are KES, an AI tutor for school students built by Krishna Software Solution. Use simple, age-appropriate language, give examples, and keep answers focused. ${context}`.trim()
+  }, [classes, subjects, chapters, topics, classId, subjectId, chapterId, topicId])
 
-    const userMessage: Message = {
-      id: `user-${Date.now()}`,
-      role: 'user',
-      content: text,
-      timestamp: new Date(),
-    }
+  const send = useCallback(
+    async (overridePrompt?: string) => {
+      const text = (overridePrompt ?? input).trim()
+      if (!text || ai.isSending) return
 
-    setMessages((prev) => [...prev, userMessage])
-    setShowQuickPrompts(false)
-    reset()
+      const userMsg: Message = {
+        id: newId(),
+        role: 'user',
+        content: text,
+        timestamp: Date.now(),
+      }
+      const pendingId = newId()
+      const pending: Message = {
+        id: pendingId,
+        role: 'assistant',
+        content: '',
+        timestamp: Date.now(),
+        pending: true,
+      }
+      setMessages((prev) => [...prev, userMsg, pending])
+      setInput('')
+      if (textareaRef.current) textareaRef.current.style.height = 'auto'
 
-    const assistantMessage: Message = {
-      id: `assistant-${Date.now()}`,
-      role: 'assistant',
-      content: '',
-      timestamp: new Date(),
-      isStreaming: true,
-    }
+      try {
+        const data = await ai.sendMessage(text)
+        setMessages((prev) =>
+          prev.map((m) =>
+            m.id === pendingId
+              ? { ...m, content: data.response, pending: false }
+              : m
+          )
+        )
+      } catch (err) {
+        const msg = getErrorMessage(err)
+        setMessages((prev) =>
+          prev.map((m) =>
+            m.id === pendingId
+              ? { ...m, pending: false, error: msg }
+              : m
+          )
+        )
+      }
+    },
+    [ai, input]
+  )
 
-    setMessages((prev) => [...prev, assistantMessage])
+  const retry = useCallback(
+    (failedId: string) => {
+      const failed = messages.find((m) => m.id === failedId)
+      if (!failed) return
+      // Find the user message right before this failed assistant message
+      const idx = messages.findIndex((m) => m.id === failedId)
+      const prev = messages[idx - 1]
+      if (!prev || prev.role !== 'user') return
+      // Remove the failed assistant message
+      setMessages((m) => m.filter((x) => x.id !== failedId))
+      send(prev.content)
+    },
+    [messages, send]
+  )
 
+  const regenerate = useCallback(() => {
+    // Find the last user message
+    const lastUser = [...messages].reverse().find((m) => m.role === 'user')
+    if (!lastUser) return
+    // Drop the last assistant message if any
+    setMessages((prev) => {
+      const idx = [...prev].reverse().findIndex((m) => m.role === 'assistant')
+      if (idx === -1) return prev
+      const realIdx = prev.length - 1 - idx
+      return [...prev.slice(0, realIdx), ...prev.slice(realIdx + 1)]
+    })
+    send(lastUser.content)
+  }, [messages, send])
+
+  const clearConversation = () => {
+    if (!confirm('Clear the current conversation?')) return
+    setMessages([
+      {
+        id: 'welcome',
+        role: 'assistant',
+        content: 'Conversation cleared. How can I help you?',
+        timestamp: Date.now(),
+      },
+    ])
+  }
+
+  const copy = async (id: string, content: string) => {
     try {
-      const response = await sendMessage({
-        prompt: text,
-        systemPrompt: Object.values(context).some(v => v) 
-          ? `You are KESH AI, a helpful learning tutor. The student is studying: Class ${context.class || 'Unknown'}, Subject: ${context.subject || 'Unknown'}, Chapter: ${context.chapter || 'Unknown'}, Topic: ${context.topic || 'Unknown'}. Provide clear, educational explanations suitable for a student.`
-          : 'You are KESH AI, a helpful learning tutor for school students. Provide clear, educational explanations.',
-      })
-
-      const aiResponse = response.data?.response || 'Sorry, I encountered an error. Please try again.'
-
-      setMessages((prev) =>
-        prev.map((m) =>
-          m.id === assistantMessage.id
-            ? { ...m, content: aiResponse, isStreaming: false }
-            : m
-        )
-      )
-    } catch (error) {
-      setMessages((prev) =>
-        prev.map((m) =>
-          m.id === assistantMessage.id
-            ? { ...m, content: 'Sorry, I encountered an error. Please try again.', isStreaming: false }
-            : m
-        )
-      )
+      await navigator.clipboard.writeText(content)
+      setCopiedId(id)
+      setTimeout(() => setCopiedId((cur) => (cur === id ? null : cur)), 1500)
+    } catch {
+      /* ignore */
     }
   }
 
-  const handleCopy = (content: string) => {
-    navigator.clipboard.writeText(content)
+  const onKeyDown = (e: KeyboardEvent<HTMLTextAreaElement>) => {
+    if (e.key === 'Enter' && !e.shiftKey) {
+      e.preventDefault()
+      send()
+    }
   }
 
-  const renderMarkdown = (content: string) => {
-    const html = marked.parse(content)
-    return <div dangerouslySetInnerHTML={{ __html: html }} className="prose prose-sm max-w-none text-foreground" />
+  const onInput = (e: FormEvent<HTMLTextAreaElement>) => {
+    setInput(e.currentTarget.value)
+    // auto-grow
+    e.currentTarget.style.height = 'auto'
+    e.currentTarget.style.height = Math.min(e.currentTarget.scrollHeight, 200) + 'px'
   }
 
   return (
-    <div className="flex h-full flex-col">
-      <div className="sticky top-0 z-20 bg-surface/80 backdrop-blur-sm border-b border-border">
-        <div className="flex h-16 items-center justify-between px-4">
-          <div className="flex items-center gap-3">
-            <h1 className="text-xl font-bold text-foreground">KESH AI Tutor</h1>
-            <Badge variant="secondary" className="text-xs">Beta</Badge>
-          </div>
-          <div className="flex items-center gap-2">
-            <DropdownMenu>
-              <DropdownMenuTrigger className="h-9 w-9" aria-label="Settings">
-                <Settings className="h-4 w-4" />
-              </DropdownMenuTrigger>
-              <DropdownMenuContent align="end">
-                <DropdownMenuLabel>Settings</DropdownMenuLabel>
-                <DropdownMenuItem>Clear conversation</DropdownMenuItem>
-                <DropdownMenuItem>Export chat</DropdownMenuItem>
-                <DropdownMenuSeparator />
-                <DropdownMenuItem>Report issue</DropdownMenuItem>
-              </DropdownMenuContent>
-            </DropdownMenu>
-            <Button variant="ghost" size="icon" className="h-9 w-9 lg:hidden" onClick={() => setIsContextPanelOpen(!isContextPanelOpen)}>
-              <Layers className="h-4 w-4" />
-            </Button>
-          </div>
-        </div>
+    <div className="flex flex-col h-[calc(100vh-7rem)] sm:h-[calc(100vh-9rem)]">
+      <PageHeader
+        title="AI Tutor"
+        description="Ask anything about your studies. Pick a context for more relevant answers."
+        actions={
+          <Button variant="outline" size="sm" onClick={clearConversation}>
+            <Trash2 className="h-4 w-4 mr-1" /> Clear
+          </Button>
+        }
+      />
 
-        <div className="px-4 pb-4 border-b border-border">
-          <div className="flex flex-wrap items-center gap-2">
-            <select
-              value={context.class}
-              onChange={(e) => setContext({ ...context, class: e.target.value })}
-              className="flex h-9 w-auto items-center rounded-lg border border-border bg-surface px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-primary-500/20"
-              aria-label="Select class"
-            >
-              {contextOptions.class.map((opt) => (
-                <option key={opt.value} value={opt.value}>{opt.label}</option>
-              ))}
-            </select>
-            <select
-              value={context.subject}
-              onChange={(e) => setContext({ ...context, subject: e.target.value })}
-              className="flex h-9 w-auto items-center rounded-lg border border-border bg-surface px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-primary-500/20"
-              aria-label="Select subject"
-              disabled={!context.class}
-            >
-              {contextOptions.subject.map((opt) => (
-                <option key={opt.value} value={opt.value}>{opt.label}</option>
-              ))}
-            </select>
-            <select
-              value={context.chapter}
-              onChange={(e) => setContext({ ...context, chapter: e.target.value })}
-              className="flex h-9 w-auto items-center rounded-lg border border-border bg-surface px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-primary-500/20"
-              aria-label="Select chapter"
-              disabled={!context.subject}
-            >
-              {contextOptions.chapter.map((opt) => (
-                <option key={opt.value} value={opt.value}>{opt.label}</option>
-              ))}
-            </select>
-            <select
-              value={context.topic}
-              onChange={(e) => setContext({ ...context, topic: e.target.value })}
-              className="flex h-9 w-auto items-center rounded-lg border border-border bg-surface px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-primary-500/20"
-              aria-label="Select topic"
-              disabled={!context.chapter}
-            >
-              {contextOptions.topic.map((opt) => (
-                <option key={opt.value} value={opt.value}>{opt.label}</option>
-              ))}
-            </select>
-            {Object.values(context).some(v => v) && (
-              <Button variant="ghost" size="sm" onClick={() => setContext({ class: '', subject: '', chapter: '', topic: '' })}>
-                <X className="h-4 w-4 mr-1" /> Clear
-              </Button>
-            )}
+      <div className="grid gap-4 lg:grid-cols-[280px_1fr] flex-1 min-h-0">
+        {/* Context panel */}
+        <Card className="hidden lg:flex flex-col p-4 gap-4 overflow-y-auto">
+          <div>
+            <h3 className="text-sm font-semibold text-foreground mb-2 flex items-center gap-2">
+              <GraduationCap className="h-4 w-4" /> Learning context
+            </h3>
+            <p className="text-xs text-foreground-muted">
+              Optional. Helps KES tailor its response.
+            </p>
           </div>
-        </div>
-      </div>
 
-      <div className="flex-1 flex overflow-hidden">
-        <aside
-          className={cn(
-            'hidden lg:block w-72 border-r border-border bg-surface flex flex-col',
-            isSidebarOpen ? 'translate-x-0' : '-translate-x-full'
+          {classesError ? (
+            <ErrorState
+              title="Couldn't load classes"
+              description={getErrorMessage(classesError)}
+              className="py-4"
+            />
+          ) : (
+            <Field
+              label="Class"
+              value={classId}
+              onChange={(v) => {
+                setClassId(v)
+                setSubjectId('')
+                setChapterId('')
+                setTopicId('')
+              }}
+              options={classes}
+              disabled={classesLoading}
+              placeholder={classesLoading ? 'Loading…' : 'Select class'}
+            />
           )}
-        >
-          <div className="flex h-16 items-center justify-between px-4 border-b border-border">
-            <h3 className="font-semibold text-foreground">History</h3>
-            <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => setIsSidebarOpen(false)}>
-              <ChevronLeft className="h-4 w-4" />
-            </Button>
-          </div>
-          <ScrollArea className="flex-1">
-            <div className="p-3 space-y-2">
-              <p className="text-xs text-foreground-muted px-2">No conversations yet</p>
-            </div>
-          </ScrollArea>
-        </aside>
+          <Field
+            label="Subject"
+            value={subjectId}
+            onChange={(v) => {
+              setSubjectId(v)
+              setChapterId('')
+              setTopicId('')
+            }}
+            options={subjects}
+            disabled={!classId}
+            placeholder={classId ? 'Select subject' : 'Pick a class first'}
+          />
+          <Field
+            label="Chapter"
+            value={chapterId}
+            onChange={(v) => {
+              setChapterId(v)
+              setTopicId('')
+            }}
+            options={chapters}
+            disabled={!subjectId}
+            placeholder={subjectId ? 'Select chapter' : 'Pick a subject first'}
+          />
+          <Field
+            label="Topic"
+            value={topicId}
+            onChange={setTopicId}
+            options={topics}
+            disabled={!chapterId}
+            placeholder={chapterId ? 'Select topic' : 'Pick a chapter first'}
+          />
 
-        <div className="flex-1 flex flex-col min-w-0">
-          <ScrollArea className="flex-1">
-            <div className="p-4 space-y-6">
-              <AnimatePresence mode="popLayout">
-                {messages.map((msg, index) => (
-                  <motion.div
-                    key={msg.id}
-                    initial={{ opacity: 0, y: 20 }}
-                    animate={{ opacity: 1, y: 0 }}
-                    exit={{ opacity: 0, y: -20 }}
-                    transition={{ duration: 0.3, delay: index * 0.05 }}
-                    className={cn('flex gap-3', msg.role === 'user' ? 'flex-row-reverse' : '')}
-                  >
-                    <Avatar
-                      size="md"
-                      className="flex-shrink-0 mt-1"
-                      src={msg.role === 'assistant' ? undefined : undefined}
-                      fallback={msg.role === 'assistant' ? 'AI' : 'You'}
-                    >
-                      {msg.role === 'assistant' && <Bot className="h-5 w-5" />}
-                    </Avatar>
-                    <div
-                      className={cn(
-                        'max-w-[70%] lg:max-w-[60%] rounded-2xl p-4',
-                        msg.role === 'user'
-                          ? 'bg-primary-600 text-white rounded-tr-sm'
-                          : 'bg-surface border border-border rounded-tl-sm'
-                      )}
-                    >
-                      {msg.isStreaming ? (
-                        <div className="flex items-center gap-2 text-foreground-muted">
-                          <Loader2 className="h-4 w-4 animate-spin" />
-                          <span>Thinking...</span>
-                        </div>
-                      ) : (
-                        <>
-                          <div className="markdown">{renderMarkdown(msg.content)}</div>
-                          {!msg.isStreaming && msg.role === 'assistant' && (
-                            <div className="mt-3 flex flex-wrap items-center gap-1.5 pt-3 border-t border-border/50">
-                              <Button
-                                variant="ghost"
-                                size="sm"
-                                className="gap-1 h-8 px-2 text-xs"
-                                onClick={() => handleCopy(msg.content)}
-                              >
-                                <Copy className="h-3.5 w-3.5" />
-                                <span>Copy</span>
-                              </Button>
-                            </div>
-                          )}
-                        </>
-                      )}
-                      <div className="mt-2 flex items-center justify-end gap-2 text-xs text-foreground-muted">
-                        <span>{formatTime(msg.timestamp)}</span>
-                      </div>
-                    </div>
-                  </motion.div>
+          {messages.length > 1 && (
+            <Button variant="ghost" size="sm" onClick={regenerate} disabled={ai.isSending}>
+              <RotateCcw className="h-4 w-4 mr-1" /> Regenerate last
+            </Button>
+          )}
+        </Card>
+
+        {/* Chat area */}
+        <Card className="flex flex-col min-h-0 overflow-hidden">
+          <div ref={scrollRef} className="flex-1 min-h-0 overflow-y-auto p-4 sm:p-6 space-y-4">
+            {messages.length === 0 ? (
+              <EmptyState
+                title="Start a conversation"
+                description="Ask a question or pick a quick prompt below."
+              />
+            ) : (
+              <AnimatePresence initial={false}>
+                {messages.map((m) => (
+                  <MessageBubble
+                    key={m.id}
+                    message={m}
+                    copied={copiedId === m.id}
+                    onCopy={() => copy(m.id, m.content)}
+                    onRetry={() => retry(m.id)}
+                  />
                 ))}
               </AnimatePresence>
-              <div ref={messagesEndRef} />
-            </div>
-          </ScrollArea>
-
-          {showQuickPrompts && (
-            <motion.div
-              initial={{ opacity: 0, y: 20 }}
-              animate={{ opacity: 1, y: 0 }}
-              className="p-4 border-t border-border bg-surface/50"
-            >
-              <div className="flex items-center justify-between mb-3">
-                <h3 className="text-sm font-medium text-foreground">Quick prompts</h3>
-                <Button variant="ghost" size="sm" onClick={() => setShowQuickPrompts(false)}>
-                  <X className="h-4 w-4" />
-                </Button>
-              </div>
-              <div className="flex flex-wrap gap-2">
-                {QUICK_PROMPTS.map((prompt) => (
-                  <Button
-                    key={prompt.label}
-                    variant="outline"
-                    size="sm"
-                    className="h-9"
-                    onClick={() => handleSendMessage(prompt.prompt)}
-                  >
-                    {prompt.label}
-                  </Button>
-                ))}
-              </div>
-            </motion.div>
-          )}
-
-          <div className="p-4 border-t border-border bg-surface">
-            <form onSubmit={handleSubmit(handleSendMessage)} className="relative">
-              <div className="flex items-end gap-2">
-                <Button
-                  type="button"
-                  variant="ghost"
-                  size="icon"
-                  className="h-12 w-12 rounded-xl"
-                  aria-label="Attach file"
-                >
-                  <Paperclip className="h-5 w-5" />
-                </Button>
-                <Textarea
-                  {...register('message')}
-                  placeholder="Ask anything about your studies..."
-                  className="flex-1 min-h-[52px] max-h-48 pr-12 resize-none"
-                  ref={textareaRef}
-                  rows={1}
-                  onKeyDown={(e) => {
-                    if (e.key === 'Enter' && !e.shiftKey) {
-                      e.preventDefault()
-                      handleSendMessage()
-                    }
-                  }}
-                  disabled={isSending}
-                />
-                <div className="flex items-end gap-1 pb-1">
-                  <Button
-                    type="button"
-                    variant="ghost"
-                    size="icon"
-                    className="h-12 w-12 rounded-xl"
-                    aria-label="Voice input"
-                  >
-                    <Mic className="h-5 w-5" />
-                  </Button>
-                  <Button
-                    type="submit"
-                    variant="gradient"
-                    size="icon"
-                    className="h-12 w-12 rounded-xl"
-                    disabled={isSending || !message.trim()}
-                    aria-label="Send message"
-                  >
-                    {isSending ? <Loader2 className="h-5 w-5 animate-spin" /> : <Send className="h-5 w-5" />}
-                  </Button>
-                </div>
-              </div>
-              {error && (
-                <div className="mt-2 text-sm text-error-600 flex items-center gap-2">
-                  <HelpCircle className="h-4 w-4" />
-                  {error.message || 'Failed to send message'}
-                </div>
-              )}
-            </form>
+            )}
           </div>
-        </div>
 
-        <AnimatePresence mode="wait">
-          {isContextPanelOpen && (
-            <>
-              <motion.div
-                initial={{ opacity: 0 }}
-                animate={{ opacity: 1 }}
-                exit={{ opacity: 0 }}
-                className="fixed inset-0 z-40 bg-black/50 lg:hidden"
-                onClick={() => setIsContextPanelOpen(false)}
-              />
-              <motion.aside
-                initial={{ x: '100%' }}
-                animate={{ x: 0 }}
-                exit={{ x: '100%' }}
-                transition={{ type: 'spring', damping: 25, stiffness: 300 }}
-                className="fixed right-0 top-0 z-50 h-full w-80 lg:w-96 bg-surface border-l border-border flex flex-col lg:hidden"
+          {/* Quick prompts */}
+          <div className="px-4 sm:px-6 pb-2 flex flex-wrap gap-2">
+            {QUICK_PROMPTS.map((p) => (
+              <button
+                key={p.label}
+                type="button"
+                onClick={() => send(p.prompt)}
+                disabled={ai.isSending}
+                className="inline-flex items-center gap-1 rounded-full border border-border bg-surface px-3 py-1.5 text-xs text-foreground-muted hover:bg-muted hover:text-foreground transition-colors disabled:opacity-50"
               >
-                <div className="flex h-16 items-center justify-between px-4 border-b border-border">
-                  <h3 className="font-semibold text-foreground">Learning Context</h3>
-                  <Button variant="ghost" size="icon" onClick={() => setIsContextPanelOpen(false)}>
-                    <X className="h-4 w-4" />
-                  </Button>
-                </div>
-                <div className="p-4 space-y-4 overflow-y-auto">
-                  <div>
-                    <label className="text-sm font-medium text-foreground">Class</label>
-                    <select
-                      value={context.class}
-                      onChange={(e) => setContext({ ...context, class: e.target.value })}
-                      className="mt-1.5 w-full h-10 rounded-lg border border-border bg-surface px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-primary-500/20"
-                    >
-                      {contextOptions.class.map((opt) => (
-                        <option key={opt.value} value={opt.value}>{opt.label}</option>
-                      ))}
-                    </select>
-                  </div>
-                  <div>
-                    <label className="text-sm font-medium text-foreground">Subject</label>
-                    <select
-                      value={context.subject}
-                      onChange={(e) => setContext({ ...context, subject: e.target.value })}
-                      className="mt-1.5 w-full h-10 rounded-lg border border-border bg-surface px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-primary-500/20"
-                      disabled={!context.class}
-                    >
-                      {contextOptions.subject.map((opt) => (
-                        <option key={opt.value} value={opt.value}>{opt.label}</option>
-                      ))}
-                    </select>
-                  </div>
-                  <div>
-                    <label className="text-sm font-medium text-foreground">Chapter</label>
-                    <select
-                      value={context.chapter}
-                      onChange={(e) => setContext({ ...context, chapter: e.target.value })}
-                      className="mt-1.5 w-full h-10 rounded-lg border border-border bg-surface px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-primary-500/20"
-                      disabled={!context.subject}
-                    >
-                      {contextOptions.chapter.map((opt) => (
-                        <option key={opt.value} value={opt.value}>{opt.label}</option>
-                      ))}
-                    </select>
-                  </div>
-                  <div>
-                    <label className="text-sm font-medium text-foreground">Topic</label>
-                    <select
-                      value={context.topic}
-                      onChange={(e) => setContext({ ...context, topic: e.target.value })}
-                      className="mt-1.5 w-full h-10 rounded-lg border border-border bg-surface px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-primary-500/20"
-                      disabled={!context.chapter}
-                    >
-                      {contextOptions.topic.map((opt) => (
-                        <option key={opt.value} value={opt.value}>{opt.label}</option>
-                      ))}
-                    </select>
-                  </div>
-                  {Object.values(context).some(v => v) && (
-                    <Button variant="outline" className="w-full" onClick={() => setContext({ class: '', subject: '', chapter: '', topic: '' })}>
-                      Clear context
-                    </Button>
-                  )}
-                </div>
-              </motion.aside>
-            </>
-          )}
-        </AnimatePresence>
+                <Sparkles className="h-3 w-3" />
+                {p.label}
+              </button>
+            ))}
+          </div>
+
+          {/* Input */}
+          <form
+            onSubmit={(e) => {
+              e.preventDefault()
+              send()
+            }}
+            className="border-t border-border p-3 sm:p-4 bg-surface"
+          >
+            <div className="flex items-end gap-2">
+              <textarea
+                ref={textareaRef}
+                value={input}
+                onInput={onInput}
+                onKeyDown={onKeyDown}
+                rows={1}
+                placeholder="Ask KES anything…  (Enter to send · Shift+Enter for newline)"
+                className="flex-1 resize-none rounded-xl border border-border bg-background px-3 py-2 text-sm text-foreground placeholder:text-foreground-muted focus:outline-none focus:ring-2 focus:ring-primary-500/20 focus:border-primary-500 max-h-[200px]"
+                disabled={ai.isSending}
+              />
+              <Button type="submit" disabled={ai.isSending || !input.trim()}>
+                {ai.isSending ? (
+                  <Loader2 className="h-4 w-4 animate-spin" />
+                ) : (
+                  <Send className="h-4 w-4" />
+                )}
+                <span className="sr-only">Send</span>
+              </Button>
+            </div>
+          </form>
+        </Card>
       </div>
     </div>
+  )
+}
+
+function Field({
+  label,
+  value,
+  onChange,
+  options,
+  disabled,
+  placeholder,
+}: {
+  label: string
+  value: string
+  onChange: (v: string) => void
+  options: { id: string; name: string }[]
+  disabled?: boolean
+  placeholder?: string
+}) {
+  return (
+    <label className="block">
+      <span className="text-xs font-medium text-foreground-muted">{label}</span>
+      <select
+        value={value}
+        onChange={(e) => onChange(e.target.value)}
+        disabled={disabled}
+        className="mt-1 w-full h-9 rounded-lg border border-border bg-background px-2 text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-primary-500/20 disabled:opacity-50"
+      >
+        <option value="">{placeholder ?? 'Select…'}</option>
+        {options.map((o) => (
+          <option key={o.id} value={o.id}>
+            {o.name}
+          </option>
+        ))}
+      </select>
+    </label>
+  )
+}
+
+function MessageBubble({
+  message,
+  copied,
+  onCopy,
+  onRetry,
+}: {
+  message: Message
+  copied: boolean
+  onCopy: () => void
+  onRetry: () => void
+}) {
+  const isUser = message.role === 'user'
+  return (
+    <motion.div
+      initial={{ opacity: 0, y: 8 }}
+      animate={{ opacity: 1, y: 0 }}
+      exit={{ opacity: 0 }}
+      transition={{ duration: 0.18 }}
+      className={cn('flex gap-3', isUser ? 'justify-end' : 'justify-start')}
+    >
+      {!isUser && (
+        <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-xl bg-gradient-to-br from-primary-600 to-violet-600 text-white">
+          <Bot className="h-4 w-4" />
+        </div>
+      )}
+      <div className={cn('max-w-[85%] sm:max-w-[75%]')}>
+        <div
+          className={cn(
+            'rounded-2xl px-4 py-2.5 text-sm whitespace-pre-wrap break-words',
+            isUser
+              ? 'bg-primary-600 text-white'
+              : 'bg-muted text-foreground',
+            message.error && 'bg-error-50 border border-error-200'
+          )}
+        >
+          {message.pending ? (
+            <span className="inline-flex items-center gap-1 text-foreground-muted">
+              <span className="h-1.5 w-1.5 rounded-full bg-foreground-muted animate-bounce [animation-delay:0ms]" />
+              <span className="h-1.5 w-1.5 rounded-full bg-foreground-muted animate-bounce [animation-delay:120ms]" />
+              <span className="h-1.5 w-1.5 rounded-full bg-foreground-muted animate-bounce [animation-delay:240ms]" />
+            </span>
+          ) : message.error ? (
+            <div className="flex items-start gap-2 text-error-700">
+              <AlertCircle className="h-4 w-4 mt-0.5 shrink-0" />
+              <div>
+                <p className="font-medium">Could not get a response</p>
+                <p className="text-xs mt-1 opacity-80">{message.error}</p>
+              </div>
+            </div>
+          ) : (
+            message.content
+          )}
+        </div>
+        <div
+          className={cn(
+            'mt-1 flex items-center gap-2 text-[11px] text-foreground-muted',
+            isUser ? 'justify-end' : 'justify-start'
+          )}
+        >
+          <span>{formatTime(message.timestamp)}</span>
+          {!isUser && !message.pending && !message.error && (
+            <>
+              <button
+                onClick={onCopy}
+                className="inline-flex items-center gap-1 hover:text-foreground"
+                aria-label="Copy message"
+              >
+                {copied ? <Check className="h-3 w-3" /> : <Copy className="h-3 w-3" />}
+                {copied ? 'Copied' : 'Copy'}
+              </button>
+              <button
+                onClick={onRetry}
+                className="inline-flex items-center gap-1 hover:text-foreground"
+                aria-label="Regenerate response"
+              >
+                <RefreshCcw className="h-3 w-3" />
+                Retry
+              </button>
+            </>
+          )}
+          {message.error && (
+            <button
+              onClick={onRetry}
+              className="inline-flex items-center gap-1 text-error-600 hover:text-error-700"
+            >
+              <RefreshCcw className="h-3 w-3" /> Retry
+            </button>
+          )}
+        </div>
+      </div>
+      {isUser && (
+        <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-xl bg-muted text-foreground">
+          <UserIcon className="h-4 w-4" />
+        </div>
+      )}
+    </motion.div>
   )
 }

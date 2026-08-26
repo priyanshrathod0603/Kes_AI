@@ -3,8 +3,8 @@ import { quizApi } from '@/api'
 import type { Quiz } from '@/types'
 
 export function useQuizzes(params?: { subjectId?: string }) {
-  return useQuery({
+  return useQuery<Quiz[]>({
     queryKey: ['quizzes', params],
-    queryFn: () => quizApi.getQuizzes(params).then((res) => res.data?.data || []),
+    queryFn: () => quizApi.getQuizzes(params).then((res) => res.data?.data ?? []),
   })
 }

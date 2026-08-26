@@ -1,4 +1,4 @@
-import { api } from './client'
+import { api, unwrap } from './client'
 import type { ApiResponse } from '@/types'
 
 export interface SchoolClass {
@@ -34,43 +34,49 @@ export interface Topic {
 }
 
 export const academicApi = {
+  /** GET /api/academic → { success, data: { data: SchoolClass[] } } */
   getClasses: async (): Promise<ApiResponse<{ data: SchoolClass[] }>> => {
     const response = await api.get('/academic')
-    return response.data
+    return unwrap<{ data: SchoolClass[] }>(response.data)
   },
 
   createClass: async (name: string): Promise<ApiResponse<{ data: SchoolClass }>> => {
     const response = await api.post('/academic', { name })
-    return response.data
+    return unwrap<{ data: SchoolClass }>(response.data)
   },
 
+  /** GET /api/academic/subjects?classId=... → { success, data: { data: Subject[] } } */
   getSubjects: async (params?: { classId?: string }): Promise<ApiResponse<{ data: Subject[] }>> => {
     const response = await api.get('/academic/subjects', { params })
-    return response.data
+    return unwrap<{ data: Subject[] }>(response.data)
   },
 
   createSubject: async (name: string, classId: string): Promise<ApiResponse<{ data: Subject }>> => {
     const response = await api.post('/academic/subjects', { name, classId })
-    return response.data
+    return unwrap<{ data: Subject }>(response.data)
   },
 
   getChapters: async (params?: { subjectId?: string }): Promise<ApiResponse<{ data: Chapter[] }>> => {
     const response = await api.get('/academic/chapters', { params })
-    return response.data
+    return unwrap<{ data: Chapter[] }>(response.data)
   },
 
-  createChapter: async (name: string, description: string | undefined, subjectId: string): Promise<ApiResponse<{ data: Chapter }>> => {
+  createChapter: async (
+    name: string,
+    description: string | undefined,
+    subjectId: string
+  ): Promise<ApiResponse<{ data: Chapter }>> => {
     const response = await api.post('/academic/chapters', { name, description, subjectId })
-    return response.data
+    return unwrap<{ data: Chapter }>(response.data)
   },
 
   getTopics: async (params?: { chapterId?: string }): Promise<ApiResponse<{ data: Topic[] }>> => {
     const response = await api.get('/academic/topics', { params })
-    return response.data
+    return unwrap<{ data: Topic[] }>(response.data)
   },
 
   createTopic: async (name: string, chapterId: string): Promise<ApiResponse<{ data: Topic }>> => {
     const response = await api.post('/academic/topics', { name, chapterId })
-    return response.data
+    return unwrap<{ data: Topic }>(response.data)
   },
 }

@@ -1,6 +1,13 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { documentApi } from '@/api'
-import type { Document, DocumentListResponse, UploadDocumentParams } from '@/types'
+import { documentApi, type Document, type DocumentListResponse, type UploadDocumentParams } from '@/api'
+
+const emptyList: DocumentListResponse = {
+  data: [],
+  page: 1,
+  limit: 20,
+  total: 0,
+  totalPages: 0,
+}
 
 export function useDocuments(params?: {
   classId?: string
@@ -13,24 +20,35 @@ export function useDocuments(params?: {
   sortBy?: string
   sortOrder?: 'asc' | 'desc'
 }) {
-  return useQuery({
-    queryKey: ['documents', params],
-    queryFn: () => documentApi.getDocuments(params).then((res) => res.data || { data: [], page: 1, limit: 20, total: 0, totalPages: 0 }),
+  return useQuery<DocumentListResponse>({
+    queryKey: ['documents', params] as const,
+    queryFn: async () => {
+      const res = await documentApi.getDocuments(params)
+      return res.data ?? emptyList
+    },
   })
 }
 
-export function useDocument(id: string) {
-  return useQuery({
-    queryKey: ['documents', id],
-    queryFn: () => documentApi.getDocument(id).then((res) => res.data?.data),
+export function useDocument(id: string | undefined) {
+  return useQuery<Document | null>({
+    queryKey: ['documents', id] as const,
+    queryFn: async () => {
+      if (!id) return null
+      const res = await documentApi.getDocument(id)
+      return res.data?.data ?? null
+    },
     enabled: !!id,
   })
 }
 
-export function useDocumentContent(id: string) {
+export function useDocumentContent(id: string | undefined) {
   return useQuery({
-    queryKey: ['documents', id, 'content'],
-    queryFn: () => documentApi.getDocumentContent(id).then((res) => res.data?.data),
+    queryKey: ['documents', id, 'content'] as const,
+    queryFn: async () => {
+      if (!id) return null
+      const res = await documentApi.getDocumentContent(id)
+      return res.data?.data ?? null
+    },
     enabled: !!id,
   })
 }
@@ -42,23 +60,21 @@ export function useDownloadDocument() {
 }
 
 export function useUploadDocument() {
-  const queryClient = useQueryClient()
-
+  const qc = useQueryClient()
   return useMutation({
     mutationFn: (params: UploadDocumentParams) => documentApi.uploadDocument(params),
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['documents'] })
+      qc.invalidateQueries({ queryKey: ['documents'] })
     },
   })
 }
 
 export function useDeleteDocument() {
-  const queryClient = useQueryClient()
-
+  const qc = useQueryClient()
   return useMutation({
     mutationFn: (id: string) => documentApi.deleteDocument(id),
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['documents'] })
+      qc.invalidateQueries({ queryKey: ['documents'] })
     },
   })
 }

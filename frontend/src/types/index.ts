@@ -39,8 +39,8 @@ export interface Document {
   extractionStatus?: string
   extractionError?: string | null
   extractedAt?: string | null
-  pageCount?: number
-  characterCount?: number
+  pageCount?: number | null
+  characterCount?: number | null
 }
 
 export interface DocumentListResponse {
@@ -101,7 +101,7 @@ export interface AIChatResponse {
   response: string
   provider: string
   model: string
-  usage: {
+  usage?: {
     promptTokens: number
     completionTokens: number
     totalTokens: number

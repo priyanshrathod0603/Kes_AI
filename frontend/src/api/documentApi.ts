@@ -1,4 +1,4 @@
-import { api } from './client'
+import { api, unwrap } from './client'
 import type { ApiResponse } from '@/types'
 
 export interface Document {
@@ -18,8 +18,8 @@ export interface Document {
   extractionStatus?: string
   extractionError?: string | null
   extractedAt?: string | null
-  pageCount?: number
-  characterCount?: number
+  pageCount?: number | null
+  characterCount?: number | null
 }
 
 export interface DocumentListResponse {
@@ -28,6 +28,16 @@ export interface DocumentListResponse {
   limit: number
   total: number
   totalPages: number
+}
+
+export interface DocumentContent {
+  documentId: string
+  extractionStatus: string
+  pageCount: number
+  characterCount: number
+  extractedAt: string | null
+  text: string
+  extractionError: string | null
 }
 
 export interface UploadDocumentParams {
@@ -39,7 +49,18 @@ export interface UploadDocumentParams {
   documentType?: string
 }
 
+export const DOCUMENT_TYPES = [
+  'CHAPTER_MATERIAL',
+  'WORKSHEET',
+  'QUESTION_PAPER',
+  'ANSWER_KEY',
+  'STUDY_MATERIAL',
+] as const
+
+export type DocumentType = (typeof DOCUMENT_TYPES)[number]
+
 export const documentApi = {
+  /** GET /api/pdf?classId=&subjectId=&...&page=&limit= → { success, data: DocumentListResponse } */
   getDocuments: async (params?: {
     classId?: string
     subjectId?: string
@@ -50,22 +71,29 @@ export const documentApi = {
     limit?: number
   }): Promise<ApiResponse<DocumentListResponse>> => {
     const response = await api.get('/pdf', { params })
-    return response.data
+    return unwrap<DocumentListResponse>(response.data)
   },
 
   getDocument: async (id: string): Promise<ApiResponse<{ data: Document }>> => {
     const response = await api.get(`/pdf/${id}`)
-    return response.data
+    return unwrap<{ data: Document }>(response.data)
   },
 
-  getDocumentContent: async (id: string): Promise<ApiResponse<{ data: { documentId: string; extractionStatus: string; pageCount: number; characterCount: number; extractedAt: string | null; text: string; extractionError: string | null } }>> => {
+  getDocumentContent: async (id: string): Promise<ApiResponse<{ data: DocumentContent }>> => {
     const response = await api.get(`/pdf/${id}/content`)
-    return response.data
+    return unwrap<{ data: DocumentContent }>(response.data)
   },
 
+  /** GET /api/pdf/:id/file → binary stream (the actual PDF) */
+  getDocumentFileUrl: (id: string): string => {
+    const base = (api.defaults.baseURL as string) || ''
+    return `${base.replace(/\/$/, '')}/pdf/${id}/file`
+  },
+
+  /** Returns a Blob for download. */
   downloadDocument: async (id: string): Promise<Blob> => {
     const response = await api.get(`/pdf/${id}/file`, { responseType: 'blob' })
-    return response.data
+    return response.data as Blob
   },
 
   uploadDocument: async (params: UploadDocumentParams): Promise<ApiResponse<{ message: string; data: Document }>> => {
@@ -80,11 +108,11 @@ export const documentApi = {
     const response = await api.post('/pdf/upload', formData, {
       headers: { 'Content-Type': 'multipart/form-data' },
     })
-    return response.data
+    return unwrap<{ message: string; data: Document }>(response.data)
   },
 
   deleteDocument: async (id: string): Promise<ApiResponse> => {
     const response = await api.delete(`/pdf/${id}`)
-    return response.data
+    return unwrap(response.data)
   },
 }

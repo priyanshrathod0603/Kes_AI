@@ -4,15 +4,21 @@ import {
   DashboardPage,
   AITutorPage,
   StudyMaterialPage,
+  DocumentViewerPage,
   ClassesPage,
+  ClassDetailPage,
   SubjectsPage,
+  SubjectDetailPage,
+  ChapterDetailPage,
+  TopicDetailPage,
   QuizzesPage,
   ProgressPage,
   ProfilePage,
   SettingsPage,
+  NotFoundPage,
 } from '@/pages'
 
-const appRoutes = [
+const routes = [
   {
     path: 'dashboard',
     element: <DashboardPage />,
@@ -26,12 +32,32 @@ const appRoutes = [
     element: <StudyMaterialPage />,
   },
   {
+    path: 'study-material/:id',
+    element: <DocumentViewerPage />,
+  },
+  {
     path: 'classes',
     element: <ClassesPage />,
   },
   {
+    path: 'classes/:id',
+    element: <ClassDetailPage />,
+  },
+  {
     path: 'subjects',
     element: <SubjectsPage />,
+  },
+  {
+    path: 'subjects/:id',
+    element: <SubjectDetailPage />,
+  },
+  {
+    path: 'subjects/:subjectId/chapters/:chapterId',
+    element: <ChapterDetailPage />,
+  },
+  {
+    path: 'subjects/:subjectId/chapters/:chapterId/topics',
+    element: <TopicDetailPage />,
   },
   {
     path: 'quizzes',
@@ -49,16 +75,17 @@ const appRoutes = [
     path: 'settings',
     element: <SettingsPage />,
   },
+  {
+    path: '*',
+    element: <NotFoundPage />,
+  },
 ]
 
 export const router = createBrowserRouter([
   {
     path: '/',
     element: <AppLayout />,
-    errorElement: <div>Error</div>,
-    children: [
-      { index: true, element: <Navigate to="dashboard" replace /> },
-      ...appRoutes,
-    ],
+    errorElement: <NotFoundPage />,
+    children: [{ index: true, element: <Navigate to="dashboard" replace /> }, ...routes],
   },
 ])
