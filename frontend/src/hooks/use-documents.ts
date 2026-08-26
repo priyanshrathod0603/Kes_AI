@@ -1,5 +1,5 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { documentApi, type Document, type DocumentListResponse, type UploadDocumentParams } from '@/api'
+import { documentApi, type Document, type DocumentContent, type DocumentListResponse, type UploadDocumentParams } from '@/api'
 
 const emptyList: DocumentListResponse = {
   data: [],
@@ -23,8 +23,11 @@ export function useDocuments(params?: {
   return useQuery<DocumentListResponse>({
     queryKey: ['documents', params] as const,
     queryFn: async () => {
-      const res = await documentApi.getDocuments(params)
-      return res.data ?? emptyList
+      try {
+        return await documentApi.getDocuments(params)
+      } catch (err) {
+        throw err
+      }
     },
   })
 }
@@ -34,20 +37,18 @@ export function useDocument(id: string | undefined) {
     queryKey: ['documents', id] as const,
     queryFn: async () => {
       if (!id) return null
-      const res = await documentApi.getDocument(id)
-      return res.data?.data ?? null
+      return await documentApi.getDocument(id)
     },
     enabled: !!id,
   })
 }
 
 export function useDocumentContent(id: string | undefined) {
-  return useQuery({
+  return useQuery<DocumentContent | null>({
     queryKey: ['documents', id, 'content'] as const,
     queryFn: async () => {
       if (!id) return null
-      const res = await documentApi.getDocumentContent(id)
-      return res.data?.data ?? null
+      return await documentApi.getDocumentContent(id)
     },
     enabled: !!id,
   })

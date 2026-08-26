@@ -1,5 +1,6 @@
 import { createBrowserRouter, Navigate } from 'react-router-dom'
 import { AppLayout } from '@/components/layout'
+import { RouteErrorPage } from '@/pages/RouteErrorPage'
 import {
   DashboardPage,
   AITutorPage,
@@ -30,10 +31,12 @@ const routes = [
   {
     path: 'study-material',
     element: <StudyMaterialPage />,
+    errorElement: <RouteErrorPage />,
   },
   {
     path: 'study-material/:id',
     element: <DocumentViewerPage />,
+    errorElement: <RouteErrorPage />,
   },
   {
     path: 'classes',
@@ -85,7 +88,7 @@ export const router = createBrowserRouter([
   {
     path: '/',
     element: <AppLayout />,
-    errorElement: <NotFoundPage />,
+    errorElement: <RouteErrorPage />,
     children: [{ index: true, element: <Navigate to="dashboard" replace /> }, ...routes],
   },
 ])

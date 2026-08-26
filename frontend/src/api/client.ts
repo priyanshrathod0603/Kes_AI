@@ -25,6 +25,7 @@ class ApiClient {
       },
     })
 
+    console.log('[API Client] baseURL:', API_BASE_URL)
     this.setupInterceptors()
   }
 

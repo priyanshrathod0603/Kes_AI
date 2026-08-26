@@ -22,10 +22,11 @@ export const aiApi = {
    * Send a chat prompt to the backend AI service.
    * Backend endpoint: POST /api/ai/test
    * Body: { systemPrompt?, prompt }
-   * Response: { success, data: { response, provider, model, usage } }
+   * Axios response:  { data: { success, data: { response, provider, model, usage } } }
+   * After unwrap():  { success, data: { response, provider, model, usage } }
    */
-  chat: async (request: AIChatRequest): Promise<ApiResponse<{ data: AIChatResponse }>> => {
+  chat: async (request: AIChatRequest): Promise<ApiResponse<AIChatResponse>> => {
     const response = await api.post('/ai/test', request)
-    return unwrap<{ data: AIChatResponse }>(response.data)
+    return unwrap<AIChatResponse>(response.data)
   },
 }

@@ -4,7 +4,7 @@ import { NavLink } from 'react-router-dom'
 import { motion, AnimatePresence } from 'framer-motion'
 import { X, Bot } from 'lucide-react'
 import { cn } from '@/lib/utils'
-import { SIDEBAR_NAV_ITEMS, SIDEBAR_BOTTOM_ITEMS, APP_NAME, COMPANY_NAME } from '@/lib/constants'
+import { SIDEBAR_GROUPS, SIDEBAR_BOTTOM_ITEMS, APP_NAME, COMPANY_NAME, ROUTES } from '@/lib/constants'
 import { Button } from '@/components/ui/button'
 import { Avatar } from '@/components/ui/avatar'
 import { Separator } from '@/components/ui/separator'
@@ -22,9 +22,63 @@ interface NavItem {
   icon: React.ComponentType<{ className?: string }>
 }
 
-function NavList({ items, onNavigate }: { items: readonly NavItem[]; onNavigate?: () => void }) {
+function NavGroupList({
+  groups,
+  onNavigate,
+}: {
+  groups: typeof SIDEBAR_GROUPS
+  onNavigate?: () => void
+}) {
   return (
-    <nav className="px-3 space-y-1" aria-label="Main menu">
+    <nav className="px-3 space-y-4" aria-label="Main menu">
+      {groups.map((group) => (
+        <div key={group.title} className="space-y-1">
+          <p className="px-3 text-[11px] font-semibold uppercase tracking-wider text-foreground-muted/70">
+            {group.title}
+          </p>
+          <div className="space-y-0.5">
+            {group.items.map((item) => {
+              const Icon = item.icon
+              return (
+                <NavLink
+                  key={item.label}
+                  to={item.href}
+                  onClick={onNavigate}
+                  end={item.href === ROUTES.DASHBOARD}
+                  className={({ isActive }) =>
+                    cn(
+                      'flex items-center gap-3 rounded-xl px-3 py-2 text-sm font-medium transition-colors',
+                      isActive
+                        ? 'bg-primary-50 text-primary-700 font-semibold dark:bg-primary-950/40 dark:text-primary-300'
+                        : 'text-foreground-muted hover:bg-muted hover:text-foreground'
+                    )
+                  }
+                >
+                  {({ isActive }) => (
+                    <>
+                      <Icon className={cn('h-4.5 w-4.5 shrink-0', isActive ? 'text-primary-600' : '')} />
+                      <span className="truncate">{item.label}</span>
+                    </>
+                  )}
+                </NavLink>
+              )
+            })}
+          </div>
+        </div>
+      ))}
+    </nav>
+  )
+}
+
+function BottomNavList({
+  items,
+  onNavigate,
+}: {
+  items: readonly NavItem[]
+  onNavigate?: () => void
+}) {
+  return (
+    <nav className="px-3 space-y-0.5" aria-label="Secondary menu">
       {items.map((item) => {
         const Icon = item.icon
         return (
@@ -32,19 +86,18 @@ function NavList({ items, onNavigate }: { items: readonly NavItem[]; onNavigate?
             key={item.label}
             to={item.href}
             onClick={onNavigate}
-            end={item.href === '/'}
             className={({ isActive }) =>
               cn(
-                'flex items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-medium transition-colors',
+                'flex items-center gap-3 rounded-xl px-3 py-2 text-sm font-medium transition-colors',
                 isActive
-                  ? 'bg-primary-50 text-primary-700'
+                  ? 'bg-primary-50 text-primary-700 font-semibold dark:bg-primary-950/40 dark:text-primary-300'
                   : 'text-foreground-muted hover:bg-muted hover:text-foreground'
               )
             }
           >
             {({ isActive }) => (
               <>
-                <Icon className={cn('h-5 w-5 flex-shrink-0', isActive ? 'text-primary-600' : '')} />
+                <Icon className={cn('h-4.5 w-4.5 shrink-0', isActive ? 'text-primary-600' : '')} />
                 <span className="truncate">{item.label}</span>
               </>
             )}
@@ -58,12 +111,12 @@ function NavList({ items, onNavigate }: { items: readonly NavItem[]; onNavigate?
 function Brand() {
   return (
     <div className="flex items-center gap-3">
-      <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-gradient-to-br from-primary-600 to-violet-600">
+      <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-gradient-to-br from-primary-600 to-violet-600 shadow-xs">
         <Bot className="h-5 w-5 text-white" />
       </div>
       <div className="flex flex-col leading-tight">
-        <span className="font-semibold text-base text-foreground">{APP_NAME}</span>
-        <span className="text-[11px] text-foreground-muted">{COMPANY_NAME}</span>
+        <span className="font-bold text-base text-foreground tracking-tight">{APP_NAME}</span>
+        <span className="text-[10px] text-foreground-muted font-medium">{COMPANY_NAME}</span>
       </div>
     </div>
   )
@@ -74,7 +127,7 @@ export function Sidebar({ isOpen, onClose, isMobile }: SidebarProps) {
   if (!isMobile) {
     return (
       <aside
-        className="hidden lg:flex fixed left-0 top-0 z-40 h-screen w-72 flex-col border-r border-border bg-surface"
+        className="hidden lg:flex fixed left-0 top-0 z-40 h-screen w-64 flex-col border-r border-border bg-surface"
         aria-label="Main navigation"
       >
         <div className="flex h-16 items-center px-5 border-b border-border">
@@ -82,17 +135,17 @@ export function Sidebar({ isOpen, onClose, isMobile }: SidebarProps) {
         </div>
 
         <ScrollArea className="flex-1 py-4">
-          <NavList items={SIDEBAR_NAV_ITEMS} />
-          <Separator className="my-4 mx-3" />
-          <NavList items={SIDEBAR_BOTTOM_ITEMS} />
+          <NavGroupList groups={SIDEBAR_GROUPS} />
+          <Separator className="my-3 mx-3" />
+          <BottomNavList items={SIDEBAR_BOTTOM_ITEMS} />
         </ScrollArea>
 
         <div className="p-4 border-t border-border">
           <div className="flex items-center gap-3">
-            <Avatar fallback="You" size="md" />
+            <Avatar fallback="KES" size="md" />
             <div className="min-w-0">
-              <p className="text-sm font-medium text-foreground truncate">Student</p>
-              <p className="text-xs text-foreground-muted truncate">{APP_NAME}</p>
+              <p className="text-sm font-semibold text-foreground truncate">Student Learner</p>
+              <p className="text-xs text-foreground-muted truncate">{APP_NAME} Portal</p>
             </div>
           </div>
         </div>
@@ -131,17 +184,17 @@ export function Sidebar({ isOpen, onClose, isMobile }: SidebarProps) {
             </div>
 
             <ScrollArea className="flex-1 py-4">
-              <NavList items={SIDEBAR_NAV_ITEMS} onNavigate={onClose} />
-              <Separator className="my-4 mx-3" />
-              <NavList items={SIDEBAR_BOTTOM_ITEMS} onNavigate={onClose} />
+              <NavGroupList groups={SIDEBAR_GROUPS} onNavigate={onClose} />
+              <Separator className="my-3 mx-3" />
+              <BottomNavList items={SIDEBAR_BOTTOM_ITEMS} onNavigate={onClose} />
             </ScrollArea>
 
             <div className="p-4 border-t border-border">
               <div className="flex items-center gap-3">
-                <Avatar fallback="You" size="md" />
+                <Avatar fallback="KES" size="md" />
                 <div className="min-w-0">
-                  <p className="text-sm font-medium text-foreground truncate">Student</p>
-                  <p className="text-xs text-foreground-muted truncate">{APP_NAME}</p>
+                  <p className="text-sm font-semibold text-foreground truncate">Student Learner</p>
+                  <p className="text-xs text-foreground-muted truncate">{APP_NAME} Portal</p>
                 </div>
               </div>
             </div>

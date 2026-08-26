@@ -1,12 +1,5 @@
-import { api, unwrap } from './client'
-import type { ApiResponse } from '@/types'
+import { api } from './client'
 
-/**
- * Quiz endpoints are not implemented in the backend yet (the route is a
- * placeholder). We keep the surface so the UI can render an honest empty
- * state, but the data is never fake — it only comes back if the backend
- * actually returns it.
- */
 export interface Quiz {
   id: string
   title: string
@@ -17,8 +10,18 @@ export interface Quiz {
 }
 
 export const quizApi = {
-  getQuizzes: async (params?: { subjectId?: string }): Promise<ApiResponse<{ data: Quiz[] }>> => {
-    const response = await api.get('/quizzes', { params })
-    return unwrap<{ data: Quiz[] }>(response.data)
+  getQuizzes: async (params?: { subjectId?: string }): Promise<Quiz[]> => {
+    try {
+      const response = await api.get('/quizzes', { params })
+      const raw = response.data
+      const payload = raw?.data?.data ?? raw?.data ?? raw
+      if (Array.isArray(payload)) {
+        return payload as Quiz[]
+      }
+      return []
+    } catch {
+      // Backend does not currently expose quiz data - return safe empty array
+      return []
+    }
   },
 }

@@ -26,6 +26,31 @@ export const ROUTES = {
   PROFILE: '/profile',
 } as const
 
+export const SIDEBAR_GROUPS = [
+  {
+    title: 'Learning',
+    items: [
+      { label: 'Dashboard', href: ROUTES.DASHBOARD, icon: LayoutDashboard },
+      { label: 'AI Tutor', href: ROUTES.AI_TUTOR, icon: Bot },
+    ],
+  },
+  {
+    title: 'Academic Management',
+    items: [
+      { label: 'Classes', href: ROUTES.CLASSES, icon: GraduationCap },
+      { label: 'Subjects', href: ROUTES.SUBJECTS, icon: BookOpen },
+      { label: 'Quizzes', href: ROUTES.QUIZZES, icon: HelpCircle },
+      { label: 'Progress', href: ROUTES.PROGRESS, icon: BarChart2 },
+    ],
+  },
+  {
+    title: 'Document Management',
+    items: [
+      { label: 'Study Material', href: ROUTES.STUDY_MATERIAL, icon: FolderOpen },
+    ],
+  },
+] as const
+
 export const SIDEBAR_NAV_ITEMS = [
   { label: 'Dashboard', href: ROUTES.DASHBOARD, icon: LayoutDashboard },
   { label: 'AI Tutor', href: ROUTES.AI_TUTOR, icon: Bot },
@@ -49,7 +74,7 @@ export const QUICK_PROMPTS = [
   { label: 'Help Solve', prompt: 'Help me solve this problem step by step' },
 ] as const
 
-export const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:5000/api'
+export const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:5001/api'
 
 export const STORAGE_KEYS = {
   THEME: 'kes_theme',

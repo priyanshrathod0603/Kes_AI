@@ -1,28 +1,30 @@
 'use client'
 
+import { useState } from 'react'
 import { Link, useParams } from 'react-router-dom'
-import { FileText, ExternalLink, Download } from 'lucide-react'
+import { FileText, ExternalLink, Download, Plus, Trash2 } from 'lucide-react'
 import { motion } from 'framer-motion'
 import { Card } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { PageHeader, EmptyState, ErrorState, LoadingState } from '@/components/feedback/States'
-import { useSubjects, useChapters, useTopics, useDocuments } from '@/hooks'
-import { documentApi } from '@/api'
+import { DeleteConfirmDialog } from '@/components/management'
+import { useSubjects, useChapters, useTopics, useDocuments, useDeleteDocument } from '@/hooks'
+import { documentApi, type Document } from '@/api'
 
-function typeLabel(t: string) {
+function typeLabel(t: string): string {
   switch (t) {
     case 'CHAPTER_MATERIAL':
-      return 'Chapter material'
+      return 'Chapter Material'
     case 'WORKSHEET':
       return 'Worksheet'
     case 'QUESTION_PAPER':
-      return 'Question paper'
+      return 'Question Paper'
     case 'ANSWER_KEY':
-      return 'Answer key'
+      return 'Answer Key'
     case 'STUDY_MATERIAL':
     default:
-      return 'Study material'
+      return 'Study Material'
   }
 }
 
@@ -44,6 +46,7 @@ function statusBadge(status?: string) {
 }
 
 function formatFileSize(bytes: number): string {
+  if (!bytes || isNaN(bytes)) return '0 B'
   if (bytes < 1024) return `${bytes} B`
   if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`
   return `${(bytes / (1024 * 1024)).toFixed(1)} MB`
@@ -51,22 +54,27 @@ function formatFileSize(bytes: number): string {
 
 export function TopicDetailPage() {
   const { subjectId, chapterId } = useParams<{ subjectId: string; chapterId: string }>()
+  const [deleteTarget, setDeleteTarget] = useState<Document | null>(null)
+
   const { data: subjects = [] } = useSubjects()
   const { data: chapters = [], isLoading: chaptersLoading } = useChapters(
-    subjectId ? { subjectId } : undefined
+    subjectId ? { subjectId } : undefined,
+    { enabled: !!subjectId }
   )
   const { data: topics = [], isLoading: topicsLoading } = useTopics(
-    chapterId ? { chapterId } : undefined
+    chapterId ? { chapterId } : undefined,
+    { enabled: !!chapterId }
   )
   const { data: docs, isLoading: docsLoading, error: docsError } = useDocuments(
     chapterId ? { chapterId, limit: 50 } : undefined
   )
+  const deleteMutation = useDeleteDocument()
 
   const subject = subjects.find((s) => s.id === subjectId)
   const chapter = chapters.find((c) => c.id === chapterId)
 
   if (chaptersLoading || topicsLoading || docsLoading) {
-    return <LoadingState label="Loading topic…" />
+    return <LoadingState label="Loading topic resources…" />
   }
 
   if (docsError) {
@@ -79,24 +87,45 @@ export function TopicDetailPage() {
       <EmptyState
         title="Topic not found"
         description="This topic does not exist or has been removed."
+        action={
+          <Button asChild>
+            <Link to="/subjects">Back to Subjects</Link>
+          </Button>
+        }
       />
     )
   }
 
+  const handleDelete = async () => {
+    if (!deleteTarget) return
+    try {
+      await deleteMutation.mutateAsync(deleteTarget.id)
+      setDeleteTarget(null)
+    } catch (err: unknown) {
+      alert(`Failed to delete document: ${(err as Error).message}`)
+    }
+  }
+
   return (
-    <div>
+    <div className="space-y-6">
       <PageHeader
         title={chapter.name}
-        description={`Resources for ${chapter.name}`}
-        back={{ to: `/subjects/${subject.id}/chapters/${chapter.id}`, label: `Back to chapter` }}
+        description={`Study materials and resources for ${chapter.name}`}
+        back={{ to: `/subjects/${subject.id}/chapters/${chapter.id}`, label: `Back to ${chapter.name}` }}
+        actions={
+          <Button asChild>
+            <Link to="/study-material">
+              <Plus className="h-4 w-4 mr-1.5" /> Upload Study Material
+            </Link>
+          </Button>
+        }
       />
 
-      {subjects.length === 0 ? null : null}
-
       {topics.length > 0 && (
-        <div className="mb-6 flex flex-wrap gap-1.5">
+        <div className="flex flex-wrap items-center gap-1.5 p-3 rounded-xl border border-border bg-surface">
+          <span className="text-xs font-semibold text-foreground-muted mr-1">Topics:</span>
           {topics.map((t) => (
-            <Badge key={t.id} variant="outline" className="text-xs">
+            <Badge key={t.id} variant="secondary" className="text-xs">
               {t.name}
             </Badge>
           ))}
@@ -104,7 +133,7 @@ export function TopicDetailPage() {
       )}
 
       {docs?.data && docs.data.length > 0 ? (
-        <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+        <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
           {docs.data.map((doc) => (
             <motion.div
               key={doc.id}
@@ -112,30 +141,40 @@ export function TopicDetailPage() {
               animate={{ opacity: 1, y: 0 }}
               transition={{ duration: 0.15 }}
             >
-              <Card className="h-full flex flex-col">
-                <div className="flex items-start gap-3 mb-3">
-                  <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-primary-50 text-primary-600 shrink-0">
+              <Card className="h-full flex flex-col p-5 hover:shadow-md transition-shadow">
+                <div className="flex items-start justify-between mb-3">
+                  <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-primary-50 text-primary-600 dark:bg-primary-950/40 shrink-0">
                     <FileText className="h-5 w-5" />
                   </div>
-                  <div className="min-w-0">
-                    <h3 className="font-semibold text-foreground line-clamp-2" title={doc.title}>
-                      {doc.title}
-                    </h3>
-                    <p className="text-xs text-foreground-muted">{formatFileSize(doc.fileSize)}</p>
-                  </div>
+                  <button
+                    type="button"
+                    onClick={() => setDeleteTarget(doc)}
+                    className="h-8 w-8 inline-flex items-center justify-center rounded-lg text-foreground-muted hover:bg-error-50 hover:text-error-600 transition-colors"
+                    title="Delete document"
+                    aria-label={`Delete ${doc.title}`}
+                  >
+                    <Trash2 className="h-4 w-4" />
+                  </button>
                 </div>
+
+                <h3 className="font-semibold text-foreground line-clamp-2 mb-1" title={doc.title}>
+                  {doc.title}
+                </h3>
+                <p className="text-xs text-foreground-muted mb-3">{formatFileSize(doc.fileSize)}</p>
+
                 <div className="flex flex-wrap gap-1.5 mb-3">
                   <Badge variant="outline" className="text-xs">{typeLabel(doc.documentType)}</Badge>
                   {statusBadge(doc.extractionStatus)}
                 </div>
-                <div className="mt-auto flex gap-2">
+
+                <div className="mt-auto flex gap-2 pt-2">
                   <Button asChild variant="outline" size="sm" className="flex-1">
                     <Link to={`/study-material/${doc.id}`}>
-                      <ExternalLink className="h-4 w-4 mr-1" /> Open
+                      <ExternalLink className="h-4 w-4 mr-1.5" /> Open
                     </Link>
                   </Button>
-                  <Button asChild variant="ghost" size="icon" aria-label="Download">
-                    <a href={documentApi.getDocumentFileUrl(doc.id)} target="_blank" rel="noreferrer">
+                  <Button asChild variant="ghost" size="sm" className="px-2" title="Download">
+                    <a href={documentApi.getDocumentFileUrl(doc.id)} target="_blank" rel="noreferrer" download={doc.fileName}>
                       <Download className="h-4 w-4" />
                     </a>
                   </Button>
@@ -146,13 +185,27 @@ export function TopicDetailPage() {
         </div>
       ) : (
         <EmptyState
-          title="No resources for this topic"
-          description="Upload a PDF from the Study Material page to add resources."
+          title="No resources for this topic yet"
+          description="Upload a study material or chapter notes PDF to make it available for students."
           action={
             <Button asChild>
-              <Link to="/study-material">Go to Study Material</Link>
+              <Link to="/study-material">
+                <Plus className="h-4 w-4 mr-1.5" /> Upload Study Material
+              </Link>
             </Button>
           }
+        />
+      )}
+
+      {deleteTarget && (
+        <DeleteConfirmDialog
+          open={!!deleteTarget}
+          onClose={() => setDeleteTarget(null)}
+          onConfirm={handleDelete}
+          title="Delete Study Material"
+          itemName={deleteTarget.title}
+          description="This document and its extracted text will be permanently removed from the library."
+          isDeleting={deleteMutation.isPending}
         />
       )}
     </div>

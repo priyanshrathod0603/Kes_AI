@@ -12,25 +12,27 @@ export function useClasses() {
   })
 }
 
-export function useSubjects(params?: { classId?: string }) {
+export function useSubjects(params?: { classId?: string }, options?: { enabled?: boolean }) {
   return useQuery<Subject[]>({
     queryKey: ['subjects', params],
     queryFn: () => academicApi.getSubjects(params).then(extractList<Subject>),
-    enabled: !params?.classId || !!params.classId,
+    enabled: options?.enabled !== undefined ? options.enabled : true,
   })
 }
 
-export function useChapters(params?: { subjectId?: string }) {
+export function useChapters(params?: { subjectId?: string }, options?: { enabled?: boolean }) {
   return useQuery<Chapter[]>({
     queryKey: ['chapters', params],
     queryFn: () => academicApi.getChapters(params).then(extractList<Chapter>),
+    enabled: options?.enabled !== undefined ? options.enabled : true,
   })
 }
 
-export function useTopics(params?: { chapterId?: string }) {
+export function useTopics(params?: { chapterId?: string }, options?: { enabled?: boolean }) {
   return useQuery<Topic[]>({
     queryKey: ['topics', params],
     queryFn: () => academicApi.getTopics(params).then(extractList<Topic>),
+    enabled: options?.enabled !== undefined ? options.enabled : true,
   })
 }
 

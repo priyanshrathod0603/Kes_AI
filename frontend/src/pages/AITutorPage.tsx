@@ -22,6 +22,7 @@ import {
 import { Button } from '@/components/ui/button'
 import { Card } from '@/components/ui/card'
 import { PageHeader, ErrorState, EmptyState } from '@/components/feedback/States'
+import { Markdown } from '@/components/ui/markdown'
 import { useAIChat, useClasses, useSubjects, useChapters, useTopics } from '@/hooks'
 import { cn } from '@/lib/utils'
 import { QUICK_PROMPTS } from '@/lib/constants'
@@ -100,9 +101,9 @@ export function AITutorPage() {
   const [topicId, setTopicId] = useState('')
 
   const { data: classes = [], isLoading: classesLoading, error: classesError } = useClasses()
-  const { data: subjects = [] } = useSubjects(classId ? { classId } : undefined)
-  const { data: chapters = [] } = useChapters(subjectId ? { subjectId } : undefined)
-  const { data: topics = [] } = useTopics(chapterId ? { chapterId } : undefined)
+  const { data: subjects = [] } = useSubjects(classId ? { classId } : undefined, { enabled: !!classId })
+  const { data: chapters = [] } = useChapters(subjectId ? { subjectId } : undefined, { enabled: !!subjectId })
+  const { data: topics = [] } = useTopics(chapterId ? { chapterId } : undefined, { enabled: !!chapterId })
 
   const ai = useAIChat()
   const scrollRef = useRef<HTMLDivElement>(null)
@@ -462,10 +463,10 @@ function MessageBubble({
       <div className={cn('max-w-[85%] sm:max-w-[75%]')}>
         <div
           className={cn(
-            'rounded-2xl px-4 py-2.5 text-sm whitespace-pre-wrap break-words',
+            'rounded-2xl px-4 py-2.5 text-sm break-words',
             isUser
-              ? 'bg-primary-600 text-white'
-              : 'bg-muted text-foreground',
+              ? 'bg-primary-600 text-white whitespace-pre-wrap'
+              : 'bg-surface border border-border text-foreground shadow-sm',
             message.error && 'bg-error-50 border border-error-200'
           )}
         >
@@ -480,11 +481,15 @@ function MessageBubble({
               <AlertCircle className="h-4 w-4 mt-0.5 shrink-0" />
               <div>
                 <p className="font-medium">Could not get a response</p>
-                <p className="text-xs mt-1 opacity-80">{message.error}</p>
+                <p className="text-xs mt-1 opacity-80 whitespace-pre-wrap break-words">
+                  {message.error}
+                </p>
               </div>
             </div>
+          ) : isUser ? (
+            <span className="whitespace-pre-wrap break-words">{message.content}</span>
           ) : (
-            message.content
+            <Markdown content={message.content} />
           )}
         </div>
         <div

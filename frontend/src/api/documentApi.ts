@@ -1,5 +1,4 @@
-import { api, unwrap } from './client'
-import type { ApiResponse } from '@/types'
+import { api } from './client'
 
 export interface Document {
   id: string
@@ -59,8 +58,20 @@ export const DOCUMENT_TYPES = [
 
 export type DocumentType = (typeof DOCUMENT_TYPES)[number]
 
+function extractPayload<T>(response: { data?: unknown }): T {
+  const raw = response?.data as { success?: boolean; data?: unknown } | undefined
+  if (raw && typeof raw === 'object' && 'success' in raw) {
+    const d1 = raw.data as { data?: unknown } | undefined
+    if (d1 && typeof d1 === 'object' && 'data' in d1) {
+      return (d1.data ?? d1) as T
+    }
+    return (raw.data ?? raw) as T
+  }
+  return response?.data as T
+}
+
 export const documentApi = {
-  /** GET /api/pdf?classId=&subjectId=&...&page=&limit= → { success, data: DocumentListResponse } */
+  /** GET /api/pdf?classId=&subjectId=&...&page=&limit= */
   getDocuments: async (params?: {
     classId?: string
     subjectId?: string
@@ -69,19 +80,44 @@ export const documentApi = {
     documentType?: string
     page?: number
     limit?: number
-  }): Promise<ApiResponse<DocumentListResponse>> => {
+  }): Promise<DocumentListResponse> => {
     const response = await api.get('/pdf', { params })
-    return unwrap<DocumentListResponse>(response.data)
+    const payload = extractPayload<any>(response)
+    if (payload && Array.isArray(payload.data)) {
+      return {
+        data: payload.data,
+        page: payload.page ?? 1,
+        limit: payload.limit ?? 20,
+        total: payload.total ?? payload.data.length,
+        totalPages: payload.totalPages ?? (payload.limit ? Math.ceil(payload.total / payload.limit) : 1),
+      }
+    }
+    if (Array.isArray(payload)) {
+      return {
+        data: payload,
+        page: 1,
+        limit: payload.length,
+        total: payload.length,
+        totalPages: 1,
+      }
+    }
+    return {
+      data: [],
+      page: 1,
+      limit: 20,
+      total: 0,
+      totalPages: 0,
+    }
   },
 
-  getDocument: async (id: string): Promise<ApiResponse<{ data: Document }>> => {
+  getDocument: async (id: string): Promise<Document | null> => {
     const response = await api.get(`/pdf/${id}`)
-    return unwrap<{ data: Document }>(response.data)
+    return extractPayload<Document>(response) ?? null
   },
 
-  getDocumentContent: async (id: string): Promise<ApiResponse<{ data: DocumentContent }>> => {
+  getDocumentContent: async (id: string): Promise<DocumentContent | null> => {
     const response = await api.get(`/pdf/${id}/content`)
-    return unwrap<{ data: DocumentContent }>(response.data)
+    return extractPayload<DocumentContent>(response) ?? null
   },
 
   /** GET /api/pdf/:id/file → binary stream (the actual PDF) */
@@ -96,7 +132,7 @@ export const documentApi = {
     return response.data as Blob
   },
 
-  uploadDocument: async (params: UploadDocumentParams): Promise<ApiResponse<{ message: string; data: Document }>> => {
+  uploadDocument: async (params: UploadDocumentParams): Promise<{ message?: string; data: Document }> => {
     const formData = new FormData()
     formData.append('file', params.file)
     if (params.classId) formData.append('classId', params.classId)
@@ -108,11 +144,11 @@ export const documentApi = {
     const response = await api.post('/pdf/upload', formData, {
       headers: { 'Content-Type': 'multipart/form-data' },
     })
-    return unwrap<{ message: string; data: Document }>(response.data)
+    const doc = extractPayload<Document>(response)
+    return { message: (response.data as any)?.message, data: doc }
   },
 
-  deleteDocument: async (id: string): Promise<ApiResponse> => {
-    const response = await api.delete(`/pdf/${id}`)
-    return unwrap(response.data)
+  deleteDocument: async (id: string): Promise<void> => {
+    await api.delete(`/pdf/${id}`)
   },
 }

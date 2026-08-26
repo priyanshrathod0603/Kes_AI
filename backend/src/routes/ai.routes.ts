@@ -5,6 +5,10 @@ const router = Router();
 
 router.post('/test', async (req: Request, res: Response) => {
   try {
+    console.log('[AI Route] Received request:', {
+      body: req.body,
+      headers: req.headers,
+    });
     const {
       systemPrompt = 'You are a helpful AI tutor for school students.',
       prompt = 'Explain fractions to a class 5 student in simple words.',

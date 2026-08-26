@@ -165,7 +165,7 @@ export class AIProviderError extends Error {
       AIErrorCode.AUTHENTICATION_ERROR,
       `${provider} authentication failed`,
       provider,
-      { statusCode: 401, isRetryable: false, cause }
+      { statusCode: 401, isRetryable: true, cause }
     );
   }
 
