@@ -12,7 +12,6 @@ import { Label } from '@/components/ui/label'
 import { Avatar } from '@/components/ui/avatar'
 import { Badge } from '@/components/ui/badge'
 import { Separator } from '@/components/ui/separator'
-import { useAuth } from '@/hooks'
 import { cn } from '@/lib/utils'
 import { User, Mail, Calendar, Award, Settings, Camera, Edit2, Save, X } from 'lucide-react'
 
@@ -24,9 +23,13 @@ const profileSchema = z.object({
 type ProfileFormData = z.infer<typeof profileSchema>
 
 export function ProfilePage() {
-  const { user, updateProfile, isLoginPending } = useAuth()
   const [isEditing, setIsEditing] = useState(false)
   const [avatarPreview, setAvatarPreview] = useState<string | null>(null)
+  const [userData, setUserData] = useState({
+    fullName: 'Student',
+    email: 'student@kesh.ai',
+    avatar: undefined,
+  })
 
   const {
     register,
@@ -36,18 +39,14 @@ export function ProfilePage() {
   } = useForm<ProfileFormData>({
     resolver: zodResolver(profileSchema),
     defaultValues: {
-      fullName: user?.fullName || '',
-      email: user?.email || '',
+      fullName: userData.fullName,
+      email: userData.email,
     },
   })
 
   const onSubmit = async (data: ProfileFormData) => {
-    try {
-      await updateProfile(data)
-      setIsEditing(false)
-    } catch (error) {
-      console.error('Failed to update profile:', error)
-    }
+    setUserData({ ...data, avatar: userData.avatar })
+    setIsEditing(false)
   }
 
   const handleCancel = () => {
@@ -89,8 +88,8 @@ export function ProfilePage() {
           <div className="flex flex-col sm:flex-row items-center sm:items-start gap-6 mb-8">
             <div className="relative">
               <Avatar
-                src={avatarPreview || user?.avatar}
-                fallback={user?.fullName || 'User'}
+                src={avatarPreview || userData.avatar}
+                fallback={userData.fullName || 'User'}
                 size="2xl"
               />
               {isEditing && (
@@ -103,19 +102,13 @@ export function ProfilePage() {
               )}
             </div>
             <div className="flex-1 text-center sm:text-left">
-              <h2 className="text-2xl font-bold text-foreground">{user?.fullName || 'Student'}</h2>
-              <p className="text-foreground-muted mt-1">{user?.email || 'student@school.edu'}</p>
+              <h2 className="text-2xl font-bold text-foreground">{userData.fullName || 'Student'}</h2>
+              <p className="text-foreground-muted mt-1">{userData.email || 'student@school.edu'}</p>
               <div className="flex items-center justify-center sm:justify-start gap-2 mt-3">
                 <Badge variant="secondary" className="gap-1">
                   <User className="h-3 w-3" />
-                  {user?.role || 'Student'}
+                  Student
                 </Badge>
-                {user?.class && (
-                  <Badge variant="outline" className="gap-1">
-                    <Calendar className="h-3 w-3" />
-                    Class {user.class}
-                  </Badge>
-                )}
               </div>
             </div>
             {isEditing ? (
@@ -188,7 +181,7 @@ export function ProfilePage() {
             <Calendar className="h-7 w-7 text-primary-600" />
           </div>
           <h3 className="font-semibold text-foreground">Member Since</h3>
-          <p className="text-2xl font-bold text-foreground mt-2 text-primary-600">{user?.createdAt ? new Date(user.createdAt).toLocaleDateString('en-US', { month: 'long', year: 'numeric' }) : '—'}</p>
+          <p className="text-2xl font-bold text-foreground mt-2 text-primary-600">January 2024</p>
         </Card>
 
         <Card variant="elevated" padding="lg" className="text-center">

@@ -88,7 +88,7 @@ export function QuizzesPage() {
           ))}
         </div>
       ) : quizzes?.length === 0 ? (
-        <Card variant="elevated" padding="xl" className="text-center py-12">
+        <Card variant="elevated" padding="lg" className="text-center py-12">
           <Target className="mx-auto h-16 w-16 text-foreground-muted mb-4" />
           <h3 className="text-lg font-semibold text-foreground">No quizzes available</h3>
           <p className="text-foreground-muted mt-2">Check back later or ask AI Tutor to create a custom quiz</p>
@@ -148,7 +148,7 @@ function QuizCard({ quiz }: { quiz: any }) {
 
       <div className="flex gap-2">
         {canRetake ? (
-          <>
+          <div className="flex gap-2 w-full">
             <Button variant="default" className="flex-1" asChild>
               <a href={`/quizzes/${quiz.id}`}>
                 {quiz.attempts === 0 ? 'Start Quiz' : 'Retake Quiz'}
@@ -158,7 +158,7 @@ function QuizCard({ quiz }: { quiz: any }) {
             <Button variant="outline" className="flex-1" asChild>
               <a href={`/quizzes/${quiz.id}/review`}>Review</a>
             </Button>
-          </>
+          </div>
         ) : (
           <Button variant="outline" className="w-full" disabled>
             Max attempts reached

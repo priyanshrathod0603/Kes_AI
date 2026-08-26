@@ -6,22 +6,7 @@ import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { Skeleton } from '@/components/ui/skeleton'
 import { useClasses } from '@/hooks'
-import { SUBJECTS } from '@/lib/constants'
-import { cn } from '@/lib/utils'
-import { GraduationCap, BookOpen, Users, ArrowRight, ChevronRight, Sparkles, Calculator, FlaskConical, Globe, Languages, Cpu } from 'lucide-react'
-
-const iconMap: Record<string, React.ComponentType<{ className?: string }>> = {
-  calculator: Calculator,
-  'flask-conical': FlaskConical,
-  'book-open': BookOpen,
-  globe: Globe,
-  languages: Languages,
-  cpu: Cpu,
-}
-
-function getSubjectIcon(iconName: string) {
-  return iconMap[iconName] || BookOpen
-}
+import { GraduationCap, BookOpen, Users, ArrowRight, ChevronRight, Sparkles } from 'lucide-react'
 
 export function ClassesPage() {
   const { data: classes, isLoading } = useClasses()
@@ -86,34 +71,12 @@ export function ClassesPage() {
                     </div>
                     <div>
                       <h3 className="font-semibold text-foreground">{cls.name}</h3>
-                      <p className="text-sm text-foreground-muted">Grade {cls.grade} • Section {cls.section}</p>
+                      <p className="text-sm text-foreground-muted">Class</p>
                     </div>
                   </div>
-                  <Badge variant="secondary">{cls.studentCount} students</Badge>
                 </div>
                 <div className="flex-1 space-y-3 mb-6">
-                  {cls.subjects.slice(0, 3).map((subject) => (
-                    <div key={subject.id} className="flex items-center justify-between p-3 rounded-xl bg-muted/50">
-                      <div className="flex items-center gap-3">
-                        <div className={cn('flex h-8 w-8 items-center justify-center rounded-lg', `bg-gradient-to-br ${subject.gradient}`)}>
-                          <subject.icon className="h-4 w-4 text-white" />
-                        </div>
-                        <div>
-                          <p className="font-medium text-foreground text-sm">{subject.name}</p>
-                          <p className="text-xs text-foreground-muted">{subject.chaptersCompleted}/{subject.totalChapters} chapters</p>
-                        </div>
-                      </div>
-                      <div className="text-right">
-                        <p className="font-semibold text-foreground">{subject.progress}%</p>
-                        <div className="w-24 h-1.5 bg-muted rounded-full overflow-hidden mt-1">
-                          <div className="h-full bg-primary-600 rounded-full" style={{ width: `${subject.progress}%` }} />
-                        </div>
-                      </div>
-                    </div>
-                  ))}
-                  {cls.subjects.length > 3 && (
-                    <Badge variant="outline" className="w-fit mx-auto">+{cls.subjects.length - 3} more subjects</Badge>
-                  )}
+                  <p className="text-foreground-muted text-sm">Subjects will appear here once added</p>
                 </div>
                 <div className="flex gap-2 pt-4 border-t border-border">
                   <Button variant="outline" className="flex-1" asChild>

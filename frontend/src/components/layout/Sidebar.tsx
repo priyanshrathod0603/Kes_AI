@@ -3,7 +3,7 @@
 import { NavLink, useLocation } from 'react-router-dom'
 import { motion, AnimatePresence } from 'framer-motion'
 import { cn } from '@/lib/utils'
-import { SIDEBAR_NAV_ITEMS, SIDEBAR_BOTTOM_ITEMS } from '@/lib/constants'
+import { SIDEBAR_NAV_ITEMS, SIDEBAR_BOTTOM_ITEMS, APP_NAME, COMPANY_NAME } from '@/lib/constants'
 import { Button } from '@/components/ui/button'
 import { Avatar } from '@/components/ui/avatar'
 import { Separator } from '@/components/ui/separator'
@@ -47,11 +47,14 @@ export function Sidebar({ isOpen, onClose, isMobile }: SidebarProps) {
             aria-label="Main navigation"
           >
             <div className="flex h-16 items-center justify-between px-4 border-b border-border">
-              <div className="flex items-center gap-3">
-                <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-gradient-to-br from-primary-600 to-violet-600">
-                  <Bot className="h-5 w-5 text-white" />
+              <div className="flex flex-col items-start gap-1">
+                <div className="flex items-center gap-3">
+                  <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-gradient-to-br from-primary-600 to-violet-600">
+                    <Bot className="h-5 w-5 text-white" />
+                  </div>
+                  <span className="font-semibold text-lg text-foreground">{APP_NAME}</span>
                 </div>
-                <span className="font-semibold text-lg text-foreground">{APP_NAME}</span>
+                <span className="text-xs text-foreground-muted px-3">{COMPANY_NAME}</span>
               </div>
               {isMobile && (
                 <Button variant="ghost" size="icon" onClick={onClose} aria-label="Close sidebar">

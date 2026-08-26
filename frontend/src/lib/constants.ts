@@ -23,6 +23,19 @@ import {
   GraduationCap,
   HelpCircle
 } from 'lucide-react'
+import type { ComponentType } from 'react'
+
+export interface SubjectConfig {
+  id: string
+  name: string
+  icon: ComponentType<{ className?: string }>
+  color: string
+  gradient: string
+  progress: number
+  chaptersCompleted: number
+  totalChapters: number
+  description: string
+}
 
 export const APP_NAME = 'KESH AI'
 export const APP_TAGLINE = 'Your AI Learning Companion'
@@ -57,14 +70,14 @@ export const SIDEBAR_BOTTOM_ITEMS = [
   { label: 'Profile', href: ROUTES.PROFILE, icon: User },
 ] as const
 
-export const SUBJECTS = [
-  { id: 'math', name: 'Mathematics', icon: Calculator, color: 'blue', gradient: 'from-blue-500 to-blue-600', description: 'Master algebra, geometry, calculus, and more with interactive lessons.' },
-  { id: 'science', name: 'Science', icon: FlaskConical, color: 'green', gradient: 'from-green-500 to-green-600', description: 'Explore physics, chemistry, and biology through experiments and simulations.' },
-  { id: 'english', name: 'English', icon: BookOpenIcon, color: 'purple', gradient: 'from-purple-500 to-purple-600', description: 'Improve grammar, vocabulary, reading comprehension, and writing skills.' },
-  { id: 'social', name: 'Social Science', icon: Globe, color: 'orange', gradient: 'from-orange-500 to-orange-600', description: 'Understand history, geography, civics, and economics.' },
-  { id: 'hindi', name: 'Hindi', icon: Languages, color: 'red', gradient: 'from-red-500 to-red-600', description: 'Learn Hindi grammar, literature, and composition.' },
-  { id: 'computer', name: 'Computer Science', icon: Cpu, color: 'indigo', gradient: 'from-indigo-500 to-indigo-600', description: 'Programming fundamentals, data structures, and algorithms.' },
-] as const
+export const SUBJECTS: readonly SubjectConfig[] = [
+  { id: 'math', name: 'Mathematics', icon: Calculator, color: 'blue', gradient: 'from-blue-500 to-blue-600', progress: 0, chaptersCompleted: 0, totalChapters: 0, description: 'Master algebra, geometry, calculus, and more with interactive lessons.' },
+  { id: 'science', name: 'Science', icon: FlaskConical, color: 'green', gradient: 'from-green-500 to-green-600', progress: 0, chaptersCompleted: 0, totalChapters: 0, description: 'Explore physics, chemistry, and biology through experiments and simulations.' },
+  { id: 'english', name: 'English', icon: BookOpenIcon, color: 'purple', gradient: 'from-purple-500 to-purple-600', progress: 0, chaptersCompleted: 0, totalChapters: 0, description: 'Improve grammar, vocabulary, reading comprehension, and writing skills.' },
+  { id: 'social', name: 'Social Science', icon: Globe, color: 'orange', gradient: 'from-orange-500 to-orange-600', progress: 0, chaptersCompleted: 0, totalChapters: 0, description: 'Understand history, geography, civics, and economics.' },
+  { id: 'hindi', name: 'Hindi', icon: Languages, color: 'red', gradient: 'from-red-500 to-red-600', progress: 0, chaptersCompleted: 0, totalChapters: 0, description: 'Learn Hindi grammar, literature, and composition.' },
+  { id: 'computer', name: 'Computer Science', icon: Cpu, color: 'indigo', gradient: 'from-indigo-500 to-indigo-600', progress: 0, chaptersCompleted: 0, totalChapters: 0, description: 'Programming fundamentals, data structures, and algorithms.' },
+]
 
 export const QUICK_PROMPTS = [
   { label: 'Explain Simply', prompt: 'Explain this in simple terms' },

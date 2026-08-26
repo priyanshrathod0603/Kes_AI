@@ -1,62 +1,64 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { documentApi } from '@/api'
-import type { StudyMaterial } from '@/types'
+import type { Document, DocumentListResponse, UploadDocumentParams } from '@/types'
 
-export function useStudyMaterials(params?: {
+export function useDocuments(params?: {
+  classId?: string
   subjectId?: string
   chapterId?: string
   topicId?: string
-  type?: string
-  search?: string
+  documentType?: string
   page?: number
   limit?: number
   sortBy?: string
   sortOrder?: 'asc' | 'desc'
-  favoritesOnly?: boolean
 }) {
   return useQuery({
     queryKey: ['documents', params],
-    queryFn: () => documentApi.getMaterials(params).then((res) => res.data!),
+    queryFn: () => documentApi.getDocuments(params).then((res) => res.data || { data: [], page: 1, limit: 20, total: 0, totalPages: 0 }),
   })
 }
 
-export function useStudyMaterial(id: string) {
+export function useDocument(id: string) {
   return useQuery({
     queryKey: ['documents', id],
-    queryFn: () => documentApi.getMaterial(id).then((res) => res.data!),
+    queryFn: () => documentApi.getDocument(id).then((res) => res.data?.data),
     enabled: !!id,
   })
 }
 
-export function useDownloadMaterial() {
-  return useMutation({
-    mutationFn: (id: string) => documentApi.getDownloadUrl(id),
+export function useDocumentContent(id: string) {
+  return useQuery({
+    queryKey: ['documents', id, 'content'],
+    queryFn: () => documentApi.getDocumentContent(id).then((res) => res.data?.data),
+    enabled: !!id,
   })
 }
 
-export function useToggleFavorite() {
+export function useDownloadDocument() {
+  return useMutation({
+    mutationFn: (id: string) => documentApi.downloadDocument(id),
+  })
+}
+
+export function useUploadDocument() {
   const queryClient = useQueryClient()
 
   return useMutation({
-    mutationFn: (id: string) => documentApi.toggleFavorite(id),
-    onSuccess: (response) => {
+    mutationFn: (params: UploadDocumentParams) => documentApi.uploadDocument(params),
+    onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['documents'] })
-      queryClient.invalidateQueries({ queryKey: ['documents', 'favorites'] })
-      return response.data
     },
   })
 }
 
-export function useFavorites() {
-  return useQuery({
-    queryKey: ['documents', 'favorites'],
-    queryFn: () => documentApi.getFavorites().then((res) => res.data!),
-  })
-}
+export function useDeleteDocument() {
+  const queryClient = useQueryClient()
 
-export function useRecentMaterials(limit = 10) {
-  return useQuery({
-    queryKey: ['documents', 'recent', limit],
-    queryFn: () => documentApi.getRecent(limit).then((res) => res.data!),
+  return useMutation({
+    mutationFn: (id: string) => documentApi.deleteDocument(id),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['documents'] })
+    },
   })
 }

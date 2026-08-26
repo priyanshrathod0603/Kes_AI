@@ -1,49 +1,76 @@
 import { api } from './client'
-import type { ApiResponse, Class, Subject, Chapter, Topic } from '@/types'
+import type { ApiResponse } from '@/types'
 
-export const classApi = {
-  getClasses: async (): Promise<ApiResponse<Class[]>> => {
-    const response = await api.get('/classes')
+export interface SchoolClass {
+  id: string
+  name: string
+  createdAt: string
+  updatedAt: string
+}
+
+export interface Subject {
+  id: string
+  name: string
+  classId: string
+  createdAt: string
+  updatedAt: string
+}
+
+export interface Chapter {
+  id: string
+  name: string
+  description: string | null
+  subjectId: string
+  createdAt: string
+  updatedAt: string
+}
+
+export interface Topic {
+  id: string
+  name: string
+  chapterId: string
+  createdAt: string
+  updatedAt: string
+}
+
+export const academicApi = {
+  getClasses: async (): Promise<ApiResponse<{ data: SchoolClass[] }>> => {
+    const response = await api.get('/academic')
     return response.data
   },
 
-  getClass: async (id: string): Promise<ApiResponse<Class>> => {
-    const response = await api.get(`/classes/${id}`)
+  createClass: async (name: string): Promise<ApiResponse<{ data: SchoolClass }>> => {
+    const response = await api.post('/academic', { name })
     return response.data
   },
 
-  getSubjects: async (classId: string): Promise<ApiResponse<Subject[]>> => {
-    const response = await api.get(`/classes/${classId}/subjects`)
+  getSubjects: async (params?: { classId?: string }): Promise<ApiResponse<{ data: Subject[] }>> => {
+    const response = await api.get('/academic/subjects', { params })
     return response.data
   },
 
-  getSubject: async (classId: string, subjectId: string): Promise<ApiResponse<Subject>> => {
-    const response = await api.get(`/classes/${classId}/subjects/${subjectId}`)
+  createSubject: async (name: string, classId: string): Promise<ApiResponse<{ data: Subject }>> => {
+    const response = await api.post('/academic/subjects', { name, classId })
     return response.data
   },
 
-  getChapters: async (classId: string, subjectId: string): Promise<ApiResponse<Chapter[]>> => {
-    const response = await api.get(`/classes/${classId}/subjects/${subjectId}/chapters`)
+  getChapters: async (params?: { subjectId?: string }): Promise<ApiResponse<{ data: Chapter[] }>> => {
+    const response = await api.get('/academic/chapters', { params })
     return response.data
   },
 
-  getChapter: async (classId: string, subjectId: string, chapterId: string): Promise<ApiResponse<Chapter>> => {
-    const response = await api.get(`/classes/${classId}/subjects/${subjectId}/chapters/${chapterId}`)
+  createChapter: async (name: string, description: string | undefined, subjectId: string): Promise<ApiResponse<{ data: Chapter }>> => {
+    const response = await api.post('/academic/chapters', { name, description, subjectId })
     return response.data
   },
 
-  getTopics: async (classId: string, subjectId: string, chapterId: string): Promise<ApiResponse<Topic[]>> => {
-    const response = await api.get(`/classes/${classId}/subjects/${subjectId}/chapters/${chapterId}/topics`)
+  getTopics: async (params?: { chapterId?: string }): Promise<ApiResponse<{ data: Topic[] }>> => {
+    const response = await api.get('/academic/topics', { params })
     return response.data
   },
 
-  getTopic: async (classId: string, subjectId: string, chapterId: string, topicId: string): Promise<ApiResponse<Topic>> => {
-    const response = await api.get(`/classes/${classId}/subjects/${subjectId}/chapters/${chapterId}/topics/${topicId}`)
-    return response.data
-  },
-
-  updateTopicProgress: async (classId: string, subjectId: string, chapterId: string, topicId: string, completed: boolean): Promise<ApiResponse<Topic>> => {
-    const response = await api.patch(`/classes/${classId}/subjects/${subjectId}/chapters/${chapterId}/topics/${topicId}/progress`, { completed })
+  createTopic: async (name: string, chapterId: string): Promise<ApiResponse<{ data: Topic }>> => {
+    const response = await api.post('/academic/topics', { name, chapterId })
     return response.data
   },
 }

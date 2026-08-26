@@ -38,42 +38,71 @@ export interface ButtonProps
   loading?: boolean
 }
 
+const LoadingSpinner = () => (
+  <svg
+    className="mr-2 h-4 w-4 animate-spin"
+    xmlns="http://www.w3.org/2000/svg"
+    fill="none"
+    viewBox="0 0 24 24"
+    aria-hidden="true"
+  >
+    <circle
+      className="opacity-25"
+      cx="12"
+      cy="12"
+      r="10"
+      stroke="currentColor"
+      strokeWidth="4"
+    />
+    <path
+      className="opacity-75"
+      fill="currentColor"
+      d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"
+    />
+  </svg>
+)
+
 const Button = React.forwardRef<HTMLButtonElement, ButtonProps>(
   ({ className, variant, size, asChild = false, loading = false, disabled, children, ...props }, ref) => {
-    const Comp = asChild ? Slot : 'button'
+    // When `asChild` is true, the Radix `Slot` requires EXACTLY ONE React element
+    // child. We must not render the loading spinner as a sibling of that element,
+    // because passing a `false` sibling to the Slot triggers:
+    //   "Slot failed to slot onto its children. Expected a single React element
+    //   child or `Slottable`."
+    // So the asChild path renders only the user-supplied element and skips the
+    // spinner (callers using asChild should disable the button via the `loading`
+    // prop or render their own spinner inside their child element).
+    if (asChild) {
+      if (!React.isValidElement(children)) {
+        // Throwing here surfaces the misuse at the call site instead of letting
+        // the Slot throw an opaque error later in the tree.
+        throw new Error(
+          'Button with `asChild` requires a single React element child (e.g. <a>, <Link>).'
+        )
+      }
+      return (
+        <Slot
+          className={cn(buttonVariants({ variant, size, className }))}
+          ref={ref}
+          aria-busy={loading || undefined}
+          {...props}
+        >
+          {children}
+        </Slot>
+      )
+    }
+
     return (
-      <Comp
+      <button
         className={cn(buttonVariants({ variant, size, className }))}
         ref={ref}
         disabled={disabled || loading}
         aria-busy={loading}
         {...props}
       >
-        {loading && (
-          <svg
-            className="mr-2 h-4 w-4 animate-spin"
-            xmlns="http://www.w3.org/2000/svg"
-            fill="none"
-            viewBox="0 0 24 24"
-            aria-hidden="true"
-          >
-            <circle
-              className="opacity-25"
-              cx="12"
-              cy="12"
-              r="10"
-              stroke="currentColor"
-              strokeWidth="4"
-            />
-            <path
-              className="opacity-75"
-              fill="currentColor"
-              d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"
-            />
-          </svg>
-        )}
+        {loading && <LoadingSpinner />}
         {children}
-      </Comp>
+      </button>
     )
   }
 )

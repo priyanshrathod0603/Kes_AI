@@ -14,8 +14,8 @@ import { ScrollArea } from '@/components/ui/scroll-area'
 import { Separator } from '@/components/ui/separator'
 import { DropdownMenu, DropdownMenuTrigger, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel, DropdownMenuSeparator } from '@/components/ui/dropdown-menu'
 import { cn } from '@/lib/utils'
-import { useAIChat, useAIConversation, useDeleteConversation } from '@/hooks'
-import { QUICK_PROMPTS, AI_RESPONSE_ACTIONS } from '@/lib/constants'
+import { useAIChat } from '@/hooks'
+import { QUICK_PROMPTS } from '@/lib/constants'
 import { formatTime } from '@/lib/utils'
 import { marked } from 'marked'
 
@@ -30,14 +30,13 @@ interface Message {
   content: string
   timestamp: Date
   isStreaming?: boolean
-  actions?: string[]
 }
 
 const initialMessages: Message[] = [
   {
     id: 'welcome',
     role: 'assistant',
-    content: `Hello! I'm your AI Tutor 👋 I'm here to help you learn and understand any topic you're studying.
+    content: `Hello! I'm KESH AI 👋 I'm here to help you learn and understand any topic you're studying.
 
 **What can I help you with?**
 - 📚 **Explain concepts** - "Explain photosynthesis in simple terms"
@@ -49,7 +48,6 @@ const initialMessages: Message[] = [
 **Quick tips:**
 - Select your class, subject, and topic above for more relevant answers
 - Use the quick prompts below for common tasks
-- Click actions on my responses to copy, simplify, or create quizzes
 
 What would you like to learn today?`,
     timestamp: new Date(),
@@ -101,8 +99,7 @@ export function AITutorPage() {
   const messagesEndRef = useRef<HTMLDivElement>(null)
   const textareaRef = useRef<HTMLTextAreaElement>(null)
 
-  const { sendMessage, regenerate, simplify, example, quiz, summarize, isSending, isRegenerating } = useAIChat()
-  const deleteConversation = useDeleteConversation()
+  const { sendMessage, isSending, error } = useAIChat()
 
   const {
     register,
@@ -124,8 +121,8 @@ export function AITutorPage() {
     scrollToBottom()
   }, [messages, scrollToBottom])
 
-  const handleSendMessage = async (customMessage?: string | { message: string }) => {
-    const text = typeof customMessage === 'string' ? customMessage : customMessage?.message || message.trim()
+  const handleSendMessage = async (data?: { message: string } | string) => {
+    const text = typeof data === 'string' ? data : data?.message || message.trim()
     if (!text || isSending) return
 
     const userMessage: Message = {
@@ -152,24 +149,17 @@ export function AITutorPage() {
     try {
       const response = await sendMessage({
         prompt: text,
-        context: Object.values(context).some(v => v) ? {
-          classId: context.class || undefined,
-          subjectId: context.subject || undefined,
-          chapterId: context.chapter || undefined,
-          topicId: context.topic || undefined,
-        } : undefined,
-        conversationHistory: messages.slice(-10).map(m => ({ 
-          id: m.id, 
-          role: m.role, 
-          content: m.content, 
-          timestamp: m.timestamp 
-        })),
+        systemPrompt: Object.values(context).some(v => v) 
+          ? `You are KESH AI, a helpful learning tutor. The student is studying: Class ${context.class || 'Unknown'}, Subject: ${context.subject || 'Unknown'}, Chapter: ${context.chapter || 'Unknown'}, Topic: ${context.topic || 'Unknown'}. Provide clear, educational explanations suitable for a student.`
+          : 'You are KESH AI, a helpful learning tutor for school students. Provide clear, educational explanations.',
       })
+
+      const aiResponse = response.data?.response || 'Sorry, I encountered an error. Please try again.'
 
       setMessages((prev) =>
         prev.map((m) =>
           m.id === assistantMessage.id
-            ? { ...m, content: response.data?.response || 'Sorry, I encountered an error.', isStreaming: false }
+            ? { ...m, content: aiResponse, isStreaming: false }
             : m
         )
       )
@@ -181,42 +171,6 @@ export function AITutorPage() {
             : m
         )
       )
-    }
-  }
-
-  const handleAction = async (action: string, messageId: string) => {
-    const msg = messages.find(m => m.id === messageId)
-    if (!msg) return
-
-    let response: string
-    try {
-      switch (action) {
-        case 'regenerate':
-          response = (await regenerate(messageId)).data?.response || 'Error'
-          break
-        case 'simplify':
-          response = (await simplify(messageId)).data?.response || 'Error'
-          break
-        case 'example':
-          response = (await example(messageId)).data?.response || 'Error'
-          break
-        case 'quiz':
-          response = (await quiz(messageId)).data?.response || 'Error'
-          break
-        case 'summarize':
-          response = (await summarize(messageId)).data?.response || 'Error'
-          break
-        default:
-          return
-      }
-
-      setMessages((prev) =>
-        prev.map((m) =>
-          m.id === messageId ? { ...m, content: response } : m
-        )
-      )
-    } catch (error) {
-      console.error('Action failed:', error)
     }
   }
 
@@ -234,15 +188,13 @@ export function AITutorPage() {
       <div className="sticky top-0 z-20 bg-surface/80 backdrop-blur-sm border-b border-border">
         <div className="flex h-16 items-center justify-between px-4">
           <div className="flex items-center gap-3">
-            <h1 className="text-xl font-bold text-foreground">AI Tutor</h1>
+            <h1 className="text-xl font-bold text-foreground">KESH AI Tutor</h1>
             <Badge variant="secondary" className="text-xs">Beta</Badge>
           </div>
           <div className="flex items-center gap-2">
             <DropdownMenu>
-              <DropdownMenuTrigger asChild>
-                <Button variant="ghost" size="icon" className="h-9 w-9">
-                  <Settings className="h-4 w-4" />
-                </Button>
+              <DropdownMenuTrigger className="h-9 w-9" aria-label="Settings">
+                <Settings className="h-4 w-4" />
               </DropdownMenuTrigger>
               <DropdownMenuContent align="end">
                 <DropdownMenuLabel>Settings</DropdownMenuLabel>
@@ -371,19 +323,6 @@ export function AITutorPage() {
                           <div className="markdown">{renderMarkdown(msg.content)}</div>
                           {!msg.isStreaming && msg.role === 'assistant' && (
                             <div className="mt-3 flex flex-wrap items-center gap-1.5 pt-3 border-t border-border/50">
-                              {AI_RESPONSE_ACTIONS.map((action) => (
-                                <Button
-                                  key={action.action}
-                                  variant="ghost"
-                                  size="sm"
-                                  className="gap-1 h-8 px-2 text-xs"
-                                  onClick={() => handleAction(action.action, msg.id)}
-                                  disabled={isRegenerating}
-                                >
-                                  <action.icon className="h-3.5 w-3.5" />
-                                  <span>{action.label}</span>
-                                </Button>
-                              ))}
                               <Button
                                 variant="ghost"
                                 size="sm"
@@ -484,6 +423,12 @@ export function AITutorPage() {
                   </Button>
                 </div>
               </div>
+              {error && (
+                <div className="mt-2 text-sm text-error-600 flex items-center gap-2">
+                  <HelpCircle className="h-4 w-4" />
+                  {error.message || 'Failed to send message'}
+                </div>
+              )}
             </form>
           </div>
         </div>

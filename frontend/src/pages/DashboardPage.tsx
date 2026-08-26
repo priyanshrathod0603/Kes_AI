@@ -8,8 +8,7 @@ import { Badge } from '@/components/ui/badge'
 import { Avatar } from '@/components/ui/avatar'
 import { Skeleton } from '@/components/ui/skeleton'
 import { ScrollArea } from '@/components/ui/scroll-area'
-import { useAuth } from '@/hooks'
-import { useProgressStats, useActivity } from '@/hooks'
+import { useProgressStats } from '@/hooks'
 import { ArrowRight, BookOpen, Clock, Target, Flame, TrendingUp, Bot, Sparkles, Zap } from 'lucide-react'
 import {
   LineChart,
@@ -32,7 +31,7 @@ import { SUBJECTS } from '@/lib/constants'
 const COLORS = ['#2563eb', '#4f46e5', '#7c3aed', '#f59e0b', '#22c55e', '#ef4444']
 
 function WeeklyStudyTimeChart({ data }: { data: Array<{ day: string; minutes: number }> }) {
-  if (!data?.length) return <Skeleton className="h-48 w-full" variant="rectangular" />
+  if (!data?.length) return <div className="h-48 flex items-center justify-center text-foreground-muted">No study time data yet</div>
 
   return (
     <ResponsiveContainer width="100%" height={200}>
@@ -45,36 +44,29 @@ function WeeklyStudyTimeChart({ data }: { data: Array<{ day: string; minutes: nu
         </defs>
         <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" vertical={false} />
         <XAxis dataKey="day" stroke="#94a3b8" fontSize={12} tickLine={false} axisLine={false} />
-        <YAxis stroke="#94a3b8" fontSize={12} tickLine={false} axisLine={false} tickFormatter={(v) => `${v}h`} />
+        <YAxis stroke="#94a3b8" fontSize={12} tickLine={false} axisLine={false} tickFormatter={(v: number) => `${v}h`} />
         <Tooltip
           contentStyle={{ backgroundColor: '#fff', border: '1px solid #e2e8f0', borderRadius: '12px', boxShadow: '0 10px 25px -5px rgba(0,0,0,0.1)' }}
-          formatter={(value: number) => [`${value}h`, 'Study time']}
+          formatter={(value: any) => value !== undefined ? [`${value}h`, 'Study time'] : ['0h', 'Study time']}
         />
-        <Area
-          type="monotone"
-          dataKey="minutes"
-          stroke="#2563eb"
-          strokeWidth={2}
-          fillOpacity={1}
-          fill="url(#studyGradient)"
-        />
+        <Area type="monotone" dataKey="minutes" stroke="#2563eb" strokeWidth={2} fillOpacity={1} fill="url(#studyGradient)" />
       </AreaChart>
     </ResponsiveContainer>
   )
 }
 
 function SubjectPerformanceChart({ data }: { data: Array<{ subjectName: string; progress: number }> }) {
-  if (!data?.length) return <Skeleton className="h-48 w-full" variant="rectangular" />
+  if (!data?.length) return <div className="h-48 flex items-center justify-center text-foreground-muted">No subject performance data yet</div>
 
   return (
     <ResponsiveContainer width="100%" height={200}>
       <BarChart data={data} margin={{ top: 10, right: 10, left: 0, bottom: 0 }}>
         <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" horizontal={false} vertical={false} />
-        <XAxis type="number" stroke="#94a3b8" fontSize={12} tickLine={false} axisLine={false} tickFormatter={(v) => `${v}%`} />
+        <XAxis type="number" stroke="#94a3b8" fontSize={12} tickLine={false} axisLine={false} tickFormatter={(v: number) => `${v}%`} />
         <YAxis dataKey="subjectName" type="category" stroke="#94a3b8" fontSize={12} tickLine={false} axisLine={false} width={100} />
         <Tooltip
           contentStyle={{ backgroundColor: '#fff', border: '1px solid #e2e8f0', borderRadius: '12px', boxShadow: '0 10px 25px -5px rgba(0,0,0,0.1)' }}
-          formatter={(value: number) => [`${value}%`, 'Progress']}
+          formatter={(value: any) => value !== undefined ? [`${value}%`, 'Progress'] : ['0%', 'Progress']}
         />
         <Bar dataKey="progress" radius={[0, 8, 8, 0]}>
           {data.map((_, index) => (
@@ -87,47 +79,32 @@ function SubjectPerformanceChart({ data }: { data: Array<{ subjectName: string; 
 }
 
 function QuizPerformanceChart({ data }: { data: Array<{ date: string; score: number; accuracy: number }> }) {
-  if (!data?.length) return <Skeleton className="h-48 w-full" variant="rectangular" />
+  if (!data?.length) return <div className="h-48 flex items-center justify-center text-foreground-muted">No quiz performance data yet</div>
 
   return (
     <ResponsiveContainer width="100%" height={200}>
       <LineChart data={data} margin={{ top: 10, right: 10, left: 0, bottom: 0 }}>
         <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" vertical={false} />
         <XAxis dataKey="date" stroke="#94a3b8" fontSize={12} tickLine={false} axisLine={false} />
-        <YAxis stroke="#94a3b8" fontSize={12} tickLine={false} axisLine={false} tickFormatter={(v) => `${v}%`} />
+        <YAxis stroke="#94a3b8" fontSize={12} tickLine={false} axisLine={false} tickFormatter={(v: number) => `${v}%`} />
         <Tooltip
           contentStyle={{ backgroundColor: '#fff', border: '1px solid #e2e8f0', borderRadius: '12px', boxShadow: '0 10px 25px -5px rgba(0,0,0,0.1)' }}
-          formatter={(value: number, name: string) => [name === 'accuracy' ? `${value}%` : `${value}`, name === 'accuracy' ? 'Accuracy' : 'Score']}
+          formatter={(value: any, name: any) => value !== undefined ? [name === 'accuracy' ? `${value}%` : `${value}`, name === 'accuracy' ? 'Accuracy' : 'Score'] : ['0', name === 'accuracy' ? 'Accuracy' : 'Score']}
         />
-        <Line
-          type="monotone"
-          dataKey="score"
-          stroke="#2563eb"
-          strokeWidth={2}
-          dot={false}
-          activeDot={{ r: 6, strokeWidth: 2 }}
-        />
-        <Line
-          type="monotone"
-          dataKey="accuracy"
-          stroke="#7c3aed"
-          strokeWidth={2}
-          dot={false}
-          strokeDasharray="5 5"
-          activeDot={{ r: 6, strokeWidth: 2 }}
-        />
+        <Line type="monotone" dataKey="score" stroke="#2563eb" strokeWidth={2} dot={false} activeDot={{ r: 6, strokeWidth: 2 }} />
+        <Line type="monotone" dataKey="accuracy" stroke="#7c3aed" strokeWidth={2} dot={false} strokeDasharray="5 5" activeDot={{ r: 6, strokeWidth: 2 }} />
       </LineChart>
     </ResponsiveContainer>
   )
 }
 
-const StatCard = ({ title, value, icon: Icon, trend, color = 'primary', subtitle }: {
+const StatCard = ({ title, value, icon: Icon, color = 'primary', subtitle, trend }: {
   title: string
   value: string | number
   icon: React.ComponentType<{ className?: string }>
-  trend?: string
   color?: 'primary' | 'success' | 'warning' | 'violet' | 'indigo'
   subtitle?: string
+  trend?: string
 }) => {
   const colorClasses = {
     primary: 'bg-primary-100 text-primary-600',
@@ -144,28 +121,24 @@ const StatCard = ({ title, value, icon: Icon, trend, color = 'primary', subtitle
           <p className="text-sm text-foreground-muted">{title}</p>
           <p className="text-2xl font-bold text-foreground mt-1">{value}</p>
           {subtitle && <p className="text-xs text-foreground-muted mt-1">{subtitle}</p>}
+          {trend && (
+            <div className="mt-2 flex items-center gap-1 text-xs text-success-600">
+              <TrendingUp className="h-3 w-3" />
+              <span>{trend}</span>
+            </div>
+          )}
         </div>
         <div className={cn('flex h-12 w-12 items-center justify-center rounded-xl', colorClasses[color])}>
           <Icon className="h-6 w-6" />
         </div>
       </div>
-      {trend && (
-        <div className="mt-4 flex items-center gap-1 text-xs text-success-600">
-          <TrendingUp className="h-3 w-3" />
-          <span>{trend}</span>
-        </div>
-      )}
     </Card>
   )
 }
 
 export function DashboardPage() {
-  const { user } = useAuth()
-  const { data: stats, isLoading: statsLoading } = useProgressStats()
-  const { data: activity } = useActivity({ limit: 5 })
-
-  const greeting = getGreeting()
-  const studentName = user?.fullName?.split(' ')[0] || 'Student'
+  const { data: stats, isLoading } = useProgressStats()
+  const hasProgressData = stats !== null && stats !== undefined
 
   return (
     <div className="space-y-6 animate-in">
@@ -176,19 +149,17 @@ export function DashboardPage() {
         className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4"
       >
         <div>
-          <h1 className="text-2xl font-bold text-foreground">{greeting}, {studentName} 👋</h1>
+          <h1 className="text-2xl font-bold text-foreground">Good morning, Student 👋</h1>
           <p className="text-foreground-muted mt-1">Ready to learn something new today?</p>
         </div>
         <div className="flex items-center gap-2">
-          <Button variant="outline" asChild>
-            <a href="/study-material">View all</a>
-          </Button>
-          <Button variant="gradient" asChild>
-            <a href="/ai-tutor">
-              <Bot className="h-4 w-4 mr-2" />
-              Ask AI Tutor
-            </a>
-          </Button>
+          <a href="/study-material" className="inline-flex items-center justify-center gap-2 whitespace-nowrap rounded-xl text-sm font-medium transition-all duration-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:pointer-events-none disabled:opacity-50 active:scale-[0.98] h-11 px-4 py-2 border-2 border-border bg-transparent hover:bg-muted hover:border-border-strong">
+            View all
+          </a>
+          <a href="/ai-tutor" className="inline-flex items-center justify-center gap-2 whitespace-nowrap rounded-xl text-sm font-medium transition-all duration-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:pointer-events-none disabled:opacity-50 active:scale-[0.98] h-11 px-4 py-2 bg-gradient-to-r from-primary-600 via-indigo-600 to-violet-600 text-white hover:from-primary-700 hover:via-indigo-700 hover:to-violet-700 shadow-lg hover:shadow-xl">
+            <Bot className="h-4 w-4 mr-2" />
+            Ask AI Tutor
+          </a>
         </div>
       </motion.div>
 
@@ -198,10 +169,10 @@ export function DashboardPage() {
         transition={{ duration: 0.4, delay: 0.1 }}
         className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4"
       >
-        <StatCard title="Study Streak" value={`${stats?.studyStreak || 0} days`} icon={Flame} color="warning" trend="+2 this week" />
-        <StatCard title="Total Study Time" value={`${Math.round((stats?.totalStudyTime || 0) / 60)}h`} icon={Clock} color="primary" subtitle="This month" />
-        <StatCard title="Questions Solved" value={stats?.questionsSolved || 0} icon={Target} color="success" />
-        <StatCard title="Quiz Accuracy" value={`${Math.round(stats?.quizAccuracy || 0)}%`} icon={TrendingUp} color="violet" />
+        <StatCard title="Study Streak" value={hasProgressData ? `${(stats as any).studyStreak || 0} days` : '0 days'} icon={Flame} color="warning" subtitle={hasProgressData ? 'Current streak' : 'Start studying'} />
+        <StatCard title="Total Study Time" value={hasProgressData ? `${Math.round(((stats as any).totalStudyTime || 0) / 60)}h` : '0h'} icon={Clock} color="primary" subtitle={hasProgressData ? 'All time' : 'Start studying'} />
+        <StatCard title="Questions Solved" value={hasProgressData ? (stats as any).questionsSolved || 0 : 0} icon={Target} color="success" subtitle={hasProgressData ? 'Practice completed' : 'Start practicing'} />
+        <StatCard title="Quiz Accuracy" value={hasProgressData ? `${Math.round((stats as any).quizAccuracy || 0)}%` : '0%'} icon={TrendingUp} color="violet" subtitle={hasProgressData ? 'Overall performance' : 'Take a quiz'} />
       </motion.div>
 
       <div className="grid gap-6 lg:grid-cols-3">
@@ -217,9 +188,9 @@ export function DashboardPage() {
                 <h2 className="text-lg font-semibold text-foreground">Continue Learning</h2>
                 <p className="text-sm text-foreground-muted">Pick up where you left off</p>
               </div>
-              <Button variant="ghost" size="sm" asChild>
-                <a href="/subjects">View all <ArrowRight className="h-4 w-4 ml-1" /></a>
-              </Button>
+              <a href="/subjects" className="inline-flex items-center gap-2 whitespace-nowrap rounded-xl text-sm font-medium transition-all duration-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:pointer-events-none disabled:opacity-50 active:scale-[0.98] h-9 px-3 text-xs hover:bg-muted hover:text-foreground" aria-label="View all subjects">
+                View all <ArrowRight className="h-4 w-4 ml-1" />
+              </a>
             </div>
             <div className="space-y-3">
               {SUBJECTS.slice(0, 3).map((subject, index) => (
@@ -235,20 +206,20 @@ export function DashboardPage() {
                   </div>
                   <div className="flex-1 min-w-0">
                     <p className="font-medium text-foreground">{subject.name}</p>
-                    <p className="text-sm text-foreground-muted">Chapter 3: {getChapterName(subject.id, 3)}</p>
+                    <p className="text-sm text-foreground-muted">No chapters started yet</p>
                     <div className="mt-2 flex items-center gap-2">
                       <div className="flex-1 h-2 bg-muted rounded-full overflow-hidden">
                         <motion.div
                           initial={{ width: 0 }}
-                          animate={{ width: `${subject.progress}%` }}
+                          animate={{ width: '0%' }}
                           transition={{ type: 'spring', stiffness: 200, damping: 15, delay: 0.5 }}
                           className="h-full bg-primary-600 rounded-full"
                         />
                       </div>
-                      <span className="text-sm font-medium text-foreground">{subject.progress}%</span>
+                      <span className="text-sm font-medium text-foreground">0%</span>
                     </div>
                   </div>
-                  <Button variant="outline" size="sm">Continue</Button>
+                  <Button variant="outline" size="sm">Start Learning</Button>
                 </motion.div>
               ))}
             </div>
@@ -266,7 +237,7 @@ export function DashboardPage() {
                 <div className="flex items-center justify-between">
                   <div>
                     <p className="text-sm text-primary-700">Study Time</p>
-                    <p className="text-3xl font-bold text-primary-900">{Math.round((stats?.totalStudyTime || 0) / 60)}h</p>
+                    <p className="text-3xl font-bold text-primary-900">{hasProgressData ? `${Math.round(((stats as any).totalStudyTime || 0) / 60)}h` : '0h'}</p>
                   </div>
                   <Clock className="h-8 w-8 text-primary-300" />
                 </div>
@@ -275,7 +246,7 @@ export function DashboardPage() {
                 <div className="flex items-center justify-between">
                   <div>
                     <p className="text-sm text-violet-700">Topics Completed</p>
-                    <p className="text-3xl font-bold text-violet-900">{stats?.subjectPerformance?.reduce((a, b) => a + b.chaptersCompleted, 0) || 0}</p>
+                    <p className="text-3xl font-bold text-violet-900">0</p>
                   </div>
                   <BookOpen className="h-8 w-8 text-violet-300" />
                 </div>
@@ -284,7 +255,7 @@ export function DashboardPage() {
                 <div className="flex items-center justify-between">
                   <div>
                     <p className="text-sm text-success-700">Quizzes Completed</p>
-                    <p className="text-3xl font-bold text-success-900">{stats?.subjectPerformance?.reduce((a, b) => a + b.quizzesCompleted, 0) || 0}</p>
+                    <p className="text-3xl font-bold text-success-900">0</p>
                   </div>
                   <Target className="h-8 w-8 text-success-300" />
                 </div>
@@ -293,7 +264,7 @@ export function DashboardPage() {
                 <div className="flex items-center justify-between">
                   <div>
                     <p className="text-sm text-warning-700">Current Streak</p>
-                    <p className="text-3xl font-bold text-warning-900">{stats?.studyStreak || 0} days</p>
+                    <p className="text-3xl font-bold text-warning-900">{hasProgressData ? `${(stats as any).studyStreak || 0} days` : '0 days'}</p>
                   </div>
                   <Flame className="h-8 w-8 text-warning-300" />
                 </div>
@@ -321,17 +292,15 @@ export function DashboardPage() {
                 </div>
               </div>
               <p className="text-foreground-muted mb-4">Ask anything about your studies - explanations, examples, quizzes, and more.</p>
-              <Button variant="default" size="lg" className="w-full" asChild>
-                <a href="/ai-tutor">
-                  <Sparkles className="h-4 w-4 mr-2" />
-                  Ask AI Tutor
-                </a>
-              </Button>
+              <a href="/ai-tutor" className="inline-flex items-center justify-center gap-2 whitespace-nowrap rounded-xl text-sm font-medium transition-all duration-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:pointer-events-none disabled:opacity-50 active:scale-[0.98] h-12 px-8 text-base bg-primary-600 text-white hover:bg-primary-700 shadow-sm hover:shadow-md w-full">
+                <Sparkles className="h-4 w-4 mr-2" />
+                Ask AI Tutor
+              </a>
               <div className="mt-4 flex flex-wrap gap-2">
                 {['Explain photosynthesis', 'Help me solve this math problem', 'Give me a quiz on fractions', 'Summarize this chapter'].map((prompt, i) => (
-                  <Button key={i} variant="ghost" size="sm" className="text-xs" asChild>
-                    <a href={`/ai-tutor?prompt=${encodeURIComponent(prompt)}`}>{prompt}</a>
-                  </Button>
+                  <a key={i} href={`/ai-tutor?prompt=${encodeURIComponent(prompt)}`} className="inline-flex items-center justify-center gap-2 whitespace-nowrap rounded-xl text-xs font-medium transition-all duration-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:pointer-events-none disabled:opacity-50 active:scale-[0.98] h-9 px-3 hover:bg-muted hover:text-foreground">
+                    {prompt}
+                  </a>
                 ))}
               </div>
             </div>
@@ -362,15 +331,15 @@ export function DashboardPage() {
                       <div className="flex-1 h-1.5 bg-muted rounded-full overflow-hidden">
                         <motion.div
                           initial={{ width: 0 }}
-                          animate={{ width: `${subject.progress}%` }}
+                          animate={{ width: '0%' }}
                           transition={{ type: 'spring', stiffness: 200, damping: 15, delay: 0.3 }}
                           className="h-full bg-primary-600 rounded-full"
                         />
                       </div>
-                      <span className="text-xs text-foreground-muted">{subject.progress}%</span>
+                      <span className="text-xs text-foreground-muted">0%</span>
                     </div>
                   </div>
-                  <Badge variant="outline" className="text-xs">{subject.chaptersCompleted}/{subject.totalChapters} chapters</Badge>
+                  <Badge variant="outline" className="text-xs">0/0 chapters</Badge>
                 </motion.div>
               ))}
             </div>
@@ -389,7 +358,7 @@ export function DashboardPage() {
             <h3 className="font-semibold text-foreground">Weekly Study Time</h3>
             <Badge variant="outline">This week</Badge>
           </div>
-          <WeeklyStudyTimeChart data={stats?.weeklyStudyTime || []} />
+          <WeeklyStudyTimeChart data={hasProgressData && (stats as any).weeklyStudyTime ? (stats as any).weeklyStudyTime : []} />
         </Card>
 
         <Card variant="elevated" padding="lg">
@@ -397,7 +366,7 @@ export function DashboardPage() {
             <h3 className="font-semibold text-foreground">Subject Performance</h3>
             <Badge variant="outline">Overall</Badge>
           </div>
-          <SubjectPerformanceChart data={stats?.subjectPerformance || []} />
+          <SubjectPerformanceChart data={hasProgressData && (stats as any).subjectPerformance ? (stats as any).subjectPerformance : []} />
         </Card>
       </motion.div>
 
@@ -409,47 +378,24 @@ export function DashboardPage() {
       >
         <Card variant="elevated" padding="lg">
           <div className="flex items-center justify-between mb-6">
-            <h3 className="font-semibold text-foreground">Quiz Performance</h3>
+            <h3 className="font-semibold text-foreground">Quiz Performance Trend</h3>
             <Badge variant="outline">Last 30 days</Badge>
           </div>
-          <QuizPerformanceChart data={stats?.quizPerformance || []} />
+          <QuizPerformanceChart data={hasProgressData && (stats as any).quizPerformance ? (stats as any).quizPerformance : []} />
         </Card>
 
         <Card variant="elevated" padding="lg">
           <div className="flex items-center justify-between mb-6">
             <h3 className="font-semibold text-foreground">Recent Activity</h3>
-            <Button variant="ghost" size="sm" asChild>
-              <a href="/progress">View all <ArrowRight className="h-4 w-4 ml-1" /></a>
-            </Button>
+            <a href="/progress" className="inline-flex items-center gap-2 whitespace-nowrap rounded-xl text-sm font-medium transition-all duration-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:pointer-events-none disabled:opacity-50 active:scale-[0.98] h-9 px-3 text-xs hover:bg-muted hover:text-foreground" aria-label="View all progress">
+              View all <ArrowRight className="h-4 w-4 ml-1" />
+            </a>
           </div>
           <ScrollArea className="h-64">
             <div className="space-y-4">
-              {activity?.map((item, index) => (
-                <motion.div
-                  key={item.id}
-                  initial={{ opacity: 0, y: 10 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  transition={{ duration: 0.3, delay: index * 0.05 }}
-                  className="flex items-start gap-3 p-3 rounded-xl hover:bg-muted/50 transition-colors"
-                >
-                  <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-muted">
-                    {(() => {
-                      const Icon = getActivityIcon(item.type)
-                      return <Icon className="h-5 w-5 text-foreground-muted" />
-                    })()}
-                  </div>
-                  <div className="flex-1 min-w-0">
-                    <p className="text-sm font-medium text-foreground">{item.title}</p>
-                    <p className="text-xs text-foreground-muted">{item.description || ''}</p>
-                    <p className="text-xs text-foreground-subtle mt-1">{formatDate(item.timestamp)}</p>
-                  </div>
-                </motion.div>
-              ))}
-              {!activity?.length && (
-                <div className="text-center py-8 text-foreground-muted">
-                  <p>No recent activity</p>
-                </div>
-              )}
+              <div className="text-center py-8 text-foreground-muted">
+                <p>No recent activity yet. Start learning to see your activity here!</p>
+              </div>
             </div>
           </ScrollArea>
         </Card>

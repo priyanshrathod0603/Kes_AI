@@ -1,45 +1,90 @@
 import { api } from './client'
-import type { ApiResponse, StudyMaterial } from '@/types'
+import type { ApiResponse } from '@/types'
+
+export interface Document {
+  id: string
+  title: string
+  fileName: string
+  fileType: string
+  fileSize: number
+  documentType: string
+  processed: boolean
+  createdAt: string
+  updatedAt: string
+  schoolClassId: string | null
+  subjectId: string | null
+  chapterId: string | null
+  topicId: string | null
+  extractionStatus?: string
+  extractionError?: string | null
+  extractedAt?: string | null
+  pageCount?: number
+  characterCount?: number
+}
+
+export interface DocumentListResponse {
+  data: Document[]
+  page: number
+  limit: number
+  total: number
+  totalPages: number
+}
+
+export interface UploadDocumentParams {
+  file: File
+  classId?: string
+  subjectId?: string
+  chapterId?: string
+  topicId?: string
+  documentType?: string
+}
 
 export const documentApi = {
-  getMaterials: async (params?: {
+  getDocuments: async (params?: {
+    classId?: string
     subjectId?: string
     chapterId?: string
     topicId?: string
-    type?: string
-    search?: string
+    documentType?: string
     page?: number
     limit?: number
-    sortBy?: string
-    sortOrder?: 'asc' | 'desc'
-    favoritesOnly?: boolean
-  }): Promise<ApiResponse<StudyMaterial[]>> => {
-    const response = await api.get('/documents', { params })
+  }): Promise<ApiResponse<DocumentListResponse>> => {
+    const response = await api.get('/pdf', { params })
     return response.data
   },
 
-  getMaterial: async (id: string): Promise<ApiResponse<StudyMaterial>> => {
-    const response = await api.get(`/documents/${id}`)
+  getDocument: async (id: string): Promise<ApiResponse<{ data: Document }>> => {
+    const response = await api.get(`/pdf/${id}`)
     return response.data
   },
 
-  getDownloadUrl: async (id: string): Promise<ApiResponse<{ url: string }>> => {
-    const response = await api.get(`/documents/${id}/download`)
+  getDocumentContent: async (id: string): Promise<ApiResponse<{ data: { documentId: string; extractionStatus: string; pageCount: number; characterCount: number; extractedAt: string | null; text: string; extractionError: string | null } }>> => {
+    const response = await api.get(`/pdf/${id}/content`)
     return response.data
   },
 
-  toggleFavorite: async (id: string): Promise<ApiResponse<StudyMaterial>> => {
-    const response = await api.post(`/documents/${id}/favorite`)
+  downloadDocument: async (id: string): Promise<Blob> => {
+    const response = await api.get(`/pdf/${id}/file`, { responseType: 'blob' })
     return response.data
   },
 
-  getFavorites: async (): Promise<ApiResponse<StudyMaterial[]>> => {
-    const response = await api.get('/documents/favorites')
+  uploadDocument: async (params: UploadDocumentParams): Promise<ApiResponse<{ message: string; data: Document }>> => {
+    const formData = new FormData()
+    formData.append('file', params.file)
+    if (params.classId) formData.append('classId', params.classId)
+    if (params.subjectId) formData.append('subjectId', params.subjectId)
+    if (params.chapterId) formData.append('chapterId', params.chapterId)
+    if (params.topicId) formData.append('topicId', params.topicId)
+    if (params.documentType) formData.append('documentType', params.documentType)
+
+    const response = await api.post('/pdf/upload', formData, {
+      headers: { 'Content-Type': 'multipart/form-data' },
+    })
     return response.data
   },
 
-  getRecent: async (limit = 10): Promise<ApiResponse<StudyMaterial[]>> => {
-    const response = await api.get('/documents/recent', { params: { limit } })
+  deleteDocument: async (id: string): Promise<ApiResponse> => {
+    const response = await api.delete(`/pdf/${id}`)
     return response.data
   },
 }
