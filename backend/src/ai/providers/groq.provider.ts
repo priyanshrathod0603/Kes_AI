@@ -102,9 +102,10 @@ export class GroqProvider {
       ],
       model,
       temperature: options.temperature ?? 0.7,
-      max_tokens: options.maxTokens ?? 1024,
+      max_tokens: options.maxTokens ?? 4096,
       stream: false,
     };
+
 
     const controller = new AbortController();
     const timeoutId = setTimeout(() => controller.abort(), timeoutMs);

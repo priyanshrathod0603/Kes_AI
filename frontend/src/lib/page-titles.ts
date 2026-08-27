@@ -3,7 +3,10 @@ const TITLES: Array<[RegExp, string]> = [
   [/^\/ai-tutor\/?$/, 'AI Tutor'],
   [/^\/study-material\/?$/, 'Study Material'],
   [/^\/study-material\/[^/]+\/?$/, 'Document'],
+  [/^\/worksheet-generator\/?$/, 'AI Worksheet Generator'],
+  [/^\/question-paper-generator\/?$/, 'AI Question Paper Generator'],
   [/^\/classes\/?$/, 'Classes'],
+
   [/^\/classes\/[^/]+\/?$/, 'Class'],
   [/^\/subjects\/?$/, 'Subjects'],
   [/^\/subjects\/[^/]+\/?$/, 'Subject'],

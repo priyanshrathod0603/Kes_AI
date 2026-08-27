@@ -138,3 +138,52 @@ model QuizQuestion {
 
   @@index([quizId])
 }
+
+model Worksheet {
+  id              String   @id @default(uuid())
+  title           String
+  schoolName      String   @default("KRISHNA ENGLISH SCHOOL")
+  schoolSubHeader String   @default("Pre-Primary-Primary School")
+  academicYear    String   @default("2026-27")
+  examName        String   @default("FA 1")
+  worksheetNumber String?  @default("1")
+  className       String
+  subjectName     String
+  chapterName     String?
+  topicName       String?
+  difficulty      String   @default("Medium")
+  contentJson     String
+  documentId      String?
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+  schoolClassId   String?
+  subjectId       String?
+
+  @@index([className])
+  @@index([subjectName])
+  @@index([createdAt])
+}
+
+model QuestionPaper {
+  id              String   @id @default(uuid())
+  title           String
+  schoolName      String   @default("KRISHNA ENGLISH SCHOOL")
+  schoolSubHeader String   @default("Pre-Primary-Primary School")
+  academicYear    String   @default("2026-27")
+  examName        String   @default("FA 1 EXAMINATION")
+  className       String
+  subjectName     String
+  totalMarks      Int      @default(25)
+  duration        String   @default("1 Hour")
+  difficulty      String   @default("Medium")
+  contentJson     String
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+  schoolClassId   String?
+  subjectId       String?
+
+  @@index([className])
+  @@index([subjectName])
+  @@index([createdAt])
+}
+

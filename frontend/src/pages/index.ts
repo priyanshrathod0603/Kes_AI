@@ -14,3 +14,6 @@ export * from './ProfilePage'
 export * from './SettingsPage'
 export * from './NotFoundPage'
 export * from './RouteErrorPage'
+export * from './WorksheetGeneratorPage'
+export * from './QuestionPaperGeneratorPage'
+

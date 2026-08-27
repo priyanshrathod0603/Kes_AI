@@ -8,6 +8,8 @@ import {
   User,
   GraduationCap,
   HelpCircle,
+  FileText,
+  FileQuestion,
 } from 'lucide-react'
 
 export const APP_NAME = 'KES'
@@ -18,6 +20,8 @@ export const ROUTES = {
   DASHBOARD: '/dashboard',
   AI_TUTOR: '/ai-tutor',
   STUDY_MATERIAL: '/study-material',
+  WORKSHEET_GENERATOR: '/worksheet-generator',
+  QUESTION_PAPER_GENERATOR: '/question-paper-generator',
   CLASSES: '/classes',
   SUBJECTS: '/subjects',
   QUIZZES: '/quizzes',
@@ -32,6 +36,13 @@ export const SIDEBAR_GROUPS = [
     items: [
       { label: 'Dashboard', href: ROUTES.DASHBOARD, icon: LayoutDashboard },
       { label: 'AI Tutor', href: ROUTES.AI_TUTOR, icon: Bot },
+    ],
+  },
+  {
+    title: 'Worksheets & Exams',
+    items: [
+      { label: 'Worksheet Generator', href: ROUTES.WORKSHEET_GENERATOR, icon: FileText },
+      { label: 'Question Paper Generator', href: ROUTES.QUESTION_PAPER_GENERATOR, icon: FileQuestion },
     ],
   },
   {
@@ -50,6 +61,7 @@ export const SIDEBAR_GROUPS = [
     ],
   },
 ] as const
+
 
 export const SIDEBAR_NAV_ITEMS = [
   { label: 'Dashboard', href: ROUTES.DASHBOARD, icon: LayoutDashboard },

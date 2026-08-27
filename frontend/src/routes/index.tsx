@@ -17,6 +17,8 @@ import {
   ProfilePage,
   SettingsPage,
   NotFoundPage,
+  WorksheetGeneratorPage,
+  QuestionPaperGeneratorPage,
 } from '@/pages'
 
 const routes = [
@@ -29,10 +31,19 @@ const routes = [
     element: <AITutorPage />,
   },
   {
+    path: 'worksheet-generator',
+    element: <WorksheetGeneratorPage />,
+  },
+  {
+    path: 'question-paper-generator',
+    element: <QuestionPaperGeneratorPage />,
+  },
+  {
     path: 'study-material',
     element: <StudyMaterialPage />,
     errorElement: <RouteErrorPage />,
   },
+
   {
     path: 'study-material/:id',
     element: <DocumentViewerPage />,
