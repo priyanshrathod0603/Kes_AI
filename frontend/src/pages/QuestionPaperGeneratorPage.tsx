@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { generatorApi } from '@/api/generatorApi';
 import { documentApi } from '@/api/documentApi';
-import type { QuestionPaperData, SavedWorksheetRecord } from '@/types/generator';
+import type { QuestionPaperData, PDFAnalysisResult } from '@/types/generator';
 
 import { QuestionPaperPreview } from '@/components/generator/QuestionPaperPreview';
 import { Button } from '@/components/ui/button';
@@ -12,15 +12,14 @@ import { useToast } from '@/hooks/use-toast';
 import {
   FileQuestion,
   Sparkles,
-  BookOpen,
+  Upload,
+  FileText,
   CheckCircle2,
   Clock,
   Trash2,
   Eye,
-  Layers,
   RefreshCw,
-  PlusCircle,
-  FileCheck,
+  X,
 } from 'lucide-react';
 
 const CLASS_PRESETS = [
@@ -46,9 +45,18 @@ const SUBJECT_PRESETS = [
 export function QuestionPaperGeneratorPage() {
   const { toast } = useToast();
 
-  // Selected source worksheets & study material
+  // Source selection tabs & state
+  const [sourceTab, setSourceTab] = useState<'upload' | 'library' | 'worksheets'>('upload');
+  const [uploadedFile, setUploadedFile] = useState<File | null>(null);
+  const [uploadedDocId, setUploadedDocId] = useState<string>('');
+  const [uploadedFileName, setUploadedFileName] = useState<string>('');
+  const [extractedContent, setExtractedContent] = useState<string>('');
+  const [selectedDocIds, setSelectedDocIds] = useState<string[]>([]);
   const [selectedWorksheetIds, setSelectedWorksheetIds] = useState<string[]>([]);
-  const [selectedStudyMaterialId, setSelectedStudyMaterialId] = useState<string>('');
+
+  // Scanning & Analysis state
+  const [isScanning, setIsScanning] = useState(false);
+  const [analysis, setAnalysis] = useState<PDFAnalysisResult | null>(null);
 
   // Exam Settings
   const [examName, setExamName] = useState<string>('FA 1 EXAMINATION');
@@ -72,7 +80,7 @@ export function QuestionPaperGeneratorPage() {
     queryFn: () => generatorApi.getSavedWorksheets(),
   });
 
-  const { data: documentsData } = useQuery({
+  const { data: documentsData, refetch: refetchDocs } = useQuery({
     queryKey: ['study-materials-library'],
     queryFn: () => documentApi.getDocuments({ limit: 50 }),
   });
@@ -82,10 +90,106 @@ export function QuestionPaperGeneratorPage() {
     queryFn: () => generatorApi.getSavedQuestionPapers(),
   });
 
+  // Handle Direct PDF Upload
+  const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    if (file.type !== 'application/pdf') {
+      toast({
+        title: 'Invalid File',
+        description: 'Please upload a valid PDF document.',
+        variant: 'destructive',
+      });
+      return;
+    }
+
+    setUploadedFile(file);
+    setUploadedFileName(file.name);
+    setIsScanning(true);
+    setAnalysis(null);
+
+    try {
+      const uploadRes = await documentApi.uploadDocument({
+        file,
+        documentType: 'STUDY_MATERIAL',
+      });
+
+      const docId = uploadRes.data?.id;
+      if (!docId) throw new Error('Upload succeeded but no document ID returned.');
+
+      setUploadedDocId(docId);
+      refetchDocs();
+
+      let contentRes = await documentApi.getDocumentContent(docId);
+      if (!contentRes?.text) {
+        await new Promise((r) => setTimeout(r, 1200));
+        contentRes = await documentApi.getDocumentContent(docId);
+      }
+
+      const text = contentRes?.text || 'Study material uploaded.';
+      setExtractedContent(text);
+
+      const analysisResult = await generatorApi.analyzePdf({
+        extractedText: text,
+        fileName: file.name,
+        documentId: docId,
+      });
+
+      setAnalysis(analysisResult);
+      if (analysisResult.detectedClass) setClassName(analysisResult.detectedClass);
+      if (analysisResult.detectedSubject) setSubjectName(analysisResult.detectedSubject.toUpperCase());
+
+      toast({
+        title: 'PDF Uploaded & Scanned',
+        description: `Successfully analyzed ${file.name} for ${analysisResult.detectedClass || 'curriculum'}!`,
+      });
+    } catch (err: any) {
+      console.error('[Upload Error]', err);
+      toast({
+        title: 'Upload/Analysis Error',
+        description: err.message || 'Failed to scan uploaded reference PDF.',
+        variant: 'destructive',
+      });
+    } finally {
+      setIsScanning(false);
+    }
+  };
+
+  // Toggle Library Document Selection
+  const toggleDocSelect = async (docId: string) => {
+    setSelectedDocIds((prev) => {
+      const next = prev.includes(docId) ? prev.filter((id) => id !== docId) : [...prev, docId];
+      return next;
+    });
+
+    // If first selection, load and analyze context
+    if (!selectedDocIds.includes(docId) && selectedDocIds.length === 0) {
+      try {
+        const doc = await documentApi.getDocument(docId);
+        const contentRes = await documentApi.getDocumentContent(docId);
+        const text = contentRes?.text || '';
+        if (text) {
+          setExtractedContent(text);
+          const analysisResult = await generatorApi.analyzePdf({
+            extractedText: text,
+            fileName: doc?.title,
+            documentId: docId,
+          });
+          setAnalysis(analysisResult);
+          if (analysisResult.detectedClass) setClassName(analysisResult.detectedClass);
+          if (analysisResult.detectedSubject) setSubjectName(analysisResult.detectedSubject.toUpperCase());
+        }
+      } catch (e) {
+        console.warn('Could not auto-analyze selected library doc:', e);
+      }
+    }
+  };
+
+  // Toggle Worksheet Selection
   const toggleWorksheetSelect = (id: string) => {
     setSelectedWorksheetIds((prev) => {
       const next = prev.includes(id) ? prev.filter((item) => item !== id) : [...prev, id];
-      // Auto populate subject and class if first one selected
       if (next.length === 1 && savedWorksheetsData) {
         const found = savedWorksheetsData.find((w) => w.id === next[0]);
         if (found) {
@@ -97,11 +201,15 @@ export function QuestionPaperGeneratorPage() {
     });
   };
 
+  // Total active sources count
+  const allDocIds = Array.from(new Set([...selectedDocIds, ...(uploadedDocId ? [uploadedDocId] : [])]));
+  const hasAnySource = allDocIds.length > 0 || selectedWorksheetIds.length > 0 || !!extractedContent;
+
   const handleGenerate = async () => {
-    if (selectedWorksheetIds.length === 0 && !selectedStudyMaterialId) {
+    if (!hasAnySource) {
       toast({
         title: 'Source Required',
-        description: 'Please select at least one source worksheet or study material.',
+        description: 'Please upload a reference PDF or select at least one study material / worksheet.',
         variant: 'destructive',
       });
       return;
@@ -120,8 +228,10 @@ export function QuestionPaperGeneratorPage() {
     setIsGenerating(true);
     try {
       const result = await generatorApi.generateQuestionPaper({
+        sourceDocumentIds: allDocIds,
+        studyMaterialId: allDocIds[0] || undefined,
+        studyMaterialText: extractedContent || undefined,
         sourceWorksheetIds: selectedWorksheetIds,
-        studyMaterialId: selectedStudyMaterialId || undefined,
         className: effectiveClass,
         subjectName,
         examName,
@@ -142,7 +252,7 @@ export function QuestionPaperGeneratorPage() {
     } catch (err: any) {
       toast({
         title: 'Generation Failed',
-        description: err.message || 'Failed to generate question paper. Please try again.',
+        description: err.message || 'Failed to generate question paper. Please check source materials.',
         variant: 'destructive',
       });
     } finally {
@@ -177,7 +287,7 @@ export function QuestionPaperGeneratorPage() {
           AI Question Paper Generator
         </h1>
         <p className="text-foreground-muted text-sm sm:text-base">
-          Generate formal school examination papers with balanced sections and marks blueprints.
+          Generate formal school examination papers from reference PDFs, study materials, and worksheets.
         </p>
       </div>
 
@@ -185,74 +295,231 @@ export function QuestionPaperGeneratorPage() {
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-8">
         {/* Left Column: Source & Exam Settings */}
         <div className="lg:col-span-5 space-y-6">
-          {/* Step 1: Select Worksheets */}
+          {/* Step 1: Select Worksheets & Study Materials */}
           <Card>
             <CardHeader className="pb-3">
               <CardTitle className="text-base flex items-center gap-2">
                 <span className="flex h-6 w-6 items-center justify-center rounded-full bg-primary-100 text-primary-700 text-xs font-bold">
                   1
                 </span>
-                Source Worksheets & Syllabus
+                Source Worksheets & Study Material
               </CardTitle>
-              <CardDescription>Select worksheets and/or study materials for this exam</CardDescription>
+              <CardDescription>Upload a reference PDF or select existing materials from library</CardDescription>
             </CardHeader>
             <CardContent className="space-y-4">
-              <div className="space-y-2 max-h-48 overflow-y-auto pr-1">
-                {savedWorksheetsData && savedWorksheetsData.length > 0 ? (
-                  savedWorksheetsData.map((w) => {
-                    const isChecked = selectedWorksheetIds.includes(w.id);
-                    return (
-                      <label
-                        key={w.id}
-                        className={`flex items-start gap-2.5 p-2.5 rounded-lg border text-xs cursor-pointer transition-colors ${
-                          isChecked
-                            ? 'border-primary-500 bg-primary-50/50 dark:bg-primary-950/30'
-                            : 'border-border hover:bg-muted'
-                        }`}
-                      >
-                        <input
-                          type="checkbox"
-                          checked={isChecked}
-                          onChange={() => toggleWorksheetSelect(w.id)}
-                          className="rounded border-border text-primary-600 focus:ring-primary-500 w-4 h-4 mt-0.5"
-                        />
-                        <div className="min-w-0 flex-1">
-                          <p className="font-semibold text-foreground truncate">{w.title}</p>
-                          <p className="text-[11px] text-foreground-muted">
-                            {w.subjectName} · {w.className} · {w.examName}
-                          </p>
-                        </div>
-                      </label>
-                    );
-                  })
-                ) : (
-                  <div className="text-center py-4 text-xs text-foreground-muted bg-muted/40 rounded-lg p-3">
-                    <p className="font-medium">No saved worksheets found.</p>
-                    <p className="text-[11px] mt-1">
-                      You can select a study material document below as syllabus context.
-                    </p>
-                  </div>
-                )}
+              {/* Tab Selector */}
+              <div className="grid grid-cols-3 gap-1 bg-muted p-1 rounded-lg text-xs font-semibold">
+                <button
+                  type="button"
+                  onClick={() => setSourceTab('upload')}
+                  className={`py-1.5 rounded-md transition-colors text-center ${
+                    sourceTab === 'upload'
+                      ? 'bg-surface shadow-xs text-foreground'
+                      : 'text-foreground-muted hover:text-foreground'
+                  }`}
+                >
+                  Upload PDF
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setSourceTab('library')}
+                  className={`py-1.5 rounded-md transition-colors text-center ${
+                    sourceTab === 'library'
+                      ? 'bg-surface shadow-xs text-foreground'
+                      : 'text-foreground-muted hover:text-foreground'
+                  }`}
+                >
+                  From Library ({documentsData?.data?.length || 0})
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setSourceTab('worksheets')}
+                  className={`py-1.5 rounded-md transition-colors text-center ${
+                    sourceTab === 'worksheets'
+                      ? 'bg-surface shadow-xs text-foreground'
+                      : 'text-foreground-muted hover:text-foreground'
+                  }`}
+                >
+                  Worksheets ({savedWorksheetsData?.length || 0})
+                </button>
               </div>
 
-              {/* Optional extra study material selection */}
-              <div className="pt-2 border-t border-border">
-                <label className="font-semibold text-xs block mb-1">
-                  Reference Study Material Document
-                </label>
-                <select
-                  value={selectedStudyMaterialId}
-                  onChange={(e) => setSelectedStudyMaterialId(e.target.value)}
-                  className="w-full h-8 px-2 rounded-md border border-input bg-surface text-xs"
-                >
-                  <option value="">None (Use selected worksheets)</option>
-                  {documentsData?.data?.map((doc) => (
-                    <option key={doc.id} value={doc.id}>
-                      {doc.title}
-                    </option>
-                  ))}
-                </select>
-              </div>
+              {/* Tab 1: Upload Reference PDF */}
+              {sourceTab === 'upload' && (
+                <div className="space-y-3">
+                  <div className="border-2 border-dashed border-border rounded-xl p-5 text-center hover:border-primary-400 transition-colors">
+                    <input
+                      type="file"
+                      id="qp-pdf-upload"
+                      accept="application/pdf"
+                      className="hidden"
+                      onChange={handleFileUpload}
+                    />
+                    <label
+                      htmlFor="qp-pdf-upload"
+                      className="cursor-pointer flex flex-col items-center gap-2"
+                    >
+                      <div className="h-10 w-10 rounded-full bg-primary-50 dark:bg-primary-950 flex items-center justify-center text-primary-600">
+                        <Upload className="h-5 w-5" />
+                      </div>
+                      <span className="text-xs font-semibold text-foreground">
+                        {uploadedFileName || 'Click or drag reference PDF here'}
+                      </span>
+                      <span className="text-[11px] text-foreground-muted">
+                        Upload chapter book, study material, or question reference (PDF)
+                      </span>
+                    </label>
+                  </div>
+
+                  {uploadedFileName && (
+                    <div className="flex items-center justify-between p-2 rounded-lg bg-emerald-50 dark:bg-emerald-950/40 border border-emerald-200 dark:border-emerald-800 text-xs text-emerald-800 dark:text-emerald-300">
+                      <div className="flex items-center gap-2 min-w-0">
+                        <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0" />
+                        <span className="font-semibold truncate">{uploadedFileName}</span>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setUploadedFile(null);
+                          setUploadedFileName('');
+                          setUploadedDocId('');
+                          setExtractedContent('');
+                          setAnalysis(null);
+                        }}
+                        className="text-foreground-muted hover:text-red-500 p-1"
+                        title="Remove uploaded file"
+                      >
+                        <X className="w-3.5 h-3.5" />
+                      </button>
+                    </div>
+                  )}
+                </div>
+              )}
+
+              {/* Tab 2: Study Material Library */}
+              {sourceTab === 'library' && (
+                <div className="space-y-2 max-h-48 overflow-y-auto pr-1">
+                  {documentsData?.data && documentsData.data.length > 0 ? (
+                    documentsData.data.map((doc) => {
+                      const isSelected = selectedDocIds.includes(doc.id);
+                      return (
+                        <button
+                          key={doc.id}
+                          type="button"
+                          onClick={() => toggleDocSelect(doc.id)}
+                          className={`w-full text-left p-2.5 rounded-lg border text-xs flex items-center justify-between transition-colors ${
+                            isSelected
+                              ? 'border-primary-500 bg-primary-50/50 dark:bg-primary-950/30 font-medium'
+                              : 'border-border hover:bg-muted'
+                          }`}
+                        >
+                          <div className="flex items-center gap-2 min-w-0">
+                            <FileText className="w-4 h-4 text-primary-600 shrink-0" />
+                            <span className="truncate">{doc.title}</span>
+                          </div>
+                          {isSelected && (
+                            <CheckCircle2 className="w-4 h-4 text-primary-600 shrink-0 ml-2" />
+                          )}
+                        </button>
+                      );
+                    })
+                  ) : (
+                    <div className="text-center py-4 text-xs text-foreground-muted">
+                      No documents found in library. Please use Upload PDF.
+                    </div>
+                  )}
+                </div>
+              )}
+
+              {/* Tab 3: Saved Worksheets */}
+              {sourceTab === 'worksheets' && (
+                <div className="space-y-2 max-h-48 overflow-y-auto pr-1">
+                  {savedWorksheetsData && savedWorksheetsData.length > 0 ? (
+                    savedWorksheetsData.map((w) => {
+                      const isChecked = selectedWorksheetIds.includes(w.id);
+                      return (
+                        <label
+                          key={w.id}
+                          className={`flex items-start gap-2.5 p-2.5 rounded-lg border text-xs cursor-pointer transition-colors ${
+                            isChecked
+                              ? 'border-primary-500 bg-primary-50/50 dark:bg-primary-950/30'
+                              : 'border-border hover:bg-muted'
+                          }`}
+                        >
+                          <input
+                            type="checkbox"
+                            checked={isChecked}
+                            onChange={() => toggleWorksheetSelect(w.id)}
+                            className="rounded border-border text-primary-600 focus:ring-primary-500 w-4 h-4 mt-0.5"
+                          />
+                          <div className="min-w-0 flex-1">
+                            <p className="font-semibold text-foreground truncate">{w.title}</p>
+                            <p className="text-[11px] text-foreground-muted">
+                              {w.subjectName} · {w.className} · {w.examName}
+                            </p>
+                          </div>
+                        </label>
+                      );
+                    })
+                  ) : (
+                    <div className="text-center py-4 text-xs text-foreground-muted bg-muted/40 rounded-lg p-3">
+                      <p className="font-medium">No saved worksheets found.</p>
+                      <p className="text-[11px] mt-1">
+                        Upload a reference PDF or choose from Library to generate your exam paper.
+                      </p>
+                    </div>
+                  )}
+                </div>
+              )}
+
+              {/* Scanning Indicator */}
+              {isScanning && (
+                <div className="flex items-center gap-2 text-xs text-primary-700 bg-primary-50 dark:bg-primary-950/50 p-2.5 rounded-lg border border-primary-200 dark:border-primary-900">
+                  <RefreshCw className="w-4 h-4 animate-spin shrink-0" />
+                  <span>Scanning study material and extracting concepts…</span>
+                </div>
+              )}
+
+              {/* Active Selection Summary */}
+              {hasAnySource && !isScanning && (
+                <div className="pt-2 border-t border-border text-xs space-y-1.5">
+                  <p className="font-semibold text-foreground flex items-center justify-between">
+                    <span>Active Exam Context Sources:</span>
+                    <span className="text-[11px] text-primary-600 font-bold">
+                      {allDocIds.length + selectedWorksheetIds.length} active
+                    </span>
+                  </p>
+                  <div className="flex flex-wrap gap-1.5">
+                    {uploadedFileName && (
+                      <span className="inline-flex items-center gap-1 bg-primary-50 dark:bg-primary-950/50 border border-primary-200 dark:border-primary-900 text-primary-800 dark:text-primary-300 px-2 py-0.5 rounded text-[11px] font-medium">
+                        📄 {uploadedFileName}
+                      </span>
+                    )}
+                    {selectedDocIds.map((id) => {
+                      const doc = documentsData?.data?.find((d) => d.id === id);
+                      return doc ? (
+                        <span
+                          key={id}
+                          className="inline-flex items-center gap-1 bg-surface border border-border text-foreground px-2 py-0.5 rounded text-[11px]"
+                        >
+                          📚 {doc.title}
+                        </span>
+                      ) : null;
+                    })}
+                    {selectedWorksheetIds.map((id) => {
+                      const w = savedWorksheetsData?.find((item) => item.id === id);
+                      return w ? (
+                        <span
+                          key={id}
+                          className="inline-flex items-center gap-1 bg-surface border border-border text-foreground px-2 py-0.5 rounded text-[11px]"
+                        >
+                          📝 {w.title}
+                        </span>
+                      ) : null;
+                    })}
+                  </div>
+                </div>
+              )}
             </CardContent>
           </Card>
 
@@ -421,7 +688,7 @@ export function QuestionPaperGeneratorPage() {
               <Button
                 variant="default"
                 onClick={handleGenerate}
-                disabled={isGenerating || (selectedWorksheetIds.length === 0 && !selectedStudyMaterialId)}
+                disabled={isGenerating || isScanning || !hasAnySource}
                 className="w-full h-10 font-bold flex items-center justify-center gap-2 mt-2 shadow-sm bg-primary-600 hover:bg-primary-700 text-white"
               >
                 {isGenerating ? (
@@ -439,7 +706,6 @@ export function QuestionPaperGeneratorPage() {
             </CardContent>
           </Card>
         </div>
-
 
         {/* Right Column: Live Printable Preview or History */}
         <div className="lg:col-span-7 space-y-6">
@@ -460,8 +726,8 @@ export function QuestionPaperGeneratorPage() {
                 <div className="max-w-md mx-auto space-y-1">
                   <h3 className="font-bold text-lg text-foreground">No Question Paper Generated Yet</h3>
                   <p className="text-xs sm:text-sm text-foreground-muted">
-                    Select one or more worksheets on the left, define marks and duration, and click
-                    Generate to produce a formal Krishna English School examination paper.
+                    Upload a reference PDF or select existing study materials/worksheets on the left, define
+                    marks and duration, and click Generate to produce a formal Krishna English School examination paper.
                   </p>
                 </div>
               </CardContent>
@@ -527,3 +793,4 @@ export function QuestionPaperGeneratorPage() {
   );
 }
 export default QuestionPaperGeneratorPage;
+

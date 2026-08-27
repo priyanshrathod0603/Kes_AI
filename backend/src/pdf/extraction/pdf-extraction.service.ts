@@ -1,5 +1,6 @@
 import fs from 'fs';
 import path from 'path';
+import zlib from 'zlib';
 import pdfParse from 'pdf-parse';
 
 export interface ExtractedPage {
@@ -33,6 +34,54 @@ const EXTRACTION_STATUS = {
 } as const;
 
 export type ExtractionStatus = (typeof EXTRACTION_STATUS)[keyof typeof EXTRACTION_STATUS];
+
+/**
+ * Fallback stream-level extractor for PDFs where pdf-parse encounters xref/flate format issues
+ */
+function fallbackExtractPdfText(buf: Buffer): string {
+  const content = buf.toString('latin1');
+  const textBlocks: string[] = [];
+  const streamRegex = /stream\r?\n([\s\S]*?)\r?\nendstream/g;
+  let match;
+  while ((match = streamRegex.exec(content)) !== null) {
+    let decomp = '';
+    const raw = Buffer.from(match[1], 'latin1');
+    try { decomp = zlib.inflateSync(raw).toString('latin1'); } catch {}
+    if (!decomp) {
+      try { decomp = zlib.inflateRawSync(raw).toString('latin1'); } catch {}
+    }
+    if (!decomp) {
+      decomp = raw.toString('latin1');
+    }
+
+    const btRegex = /BT[\s\S]*?ET/g;
+    let btMatch;
+    while ((btMatch = btRegex.exec(decomp)) !== null) {
+      const block = btMatch[0];
+      // Match hex strings: <48656C6C6F>
+      const hexRegex = /<([0-9a-fA-F]+)>\s*(?:Tj|\'|\"|TJ)/g;
+      let hMatch;
+      while ((hMatch = hexRegex.exec(block)) !== null) {
+        try {
+          const decoded = Buffer.from(hMatch[1], 'hex').toString('utf-8');
+          if (decoded && decoded.trim().length > 0) {
+            textBlocks.push(decoded);
+          }
+        } catch {}
+      }
+      // Match literal strings: (Hello World) Tj
+      const litRegex = /\(([^)]+)\)\s*(?:Tj|\'|\"|TJ)/g;
+      let lMatch;
+      while ((lMatch = litRegex.exec(block)) !== null) {
+        if (lMatch[1] && lMatch[1].trim().length > 0) {
+          textBlocks.push(lMatch[1]);
+        }
+      }
+    }
+  }
+
+  return textBlocks.join(' ').replace(/\s+/g, ' ').trim();
+}
 
 /**
  * Validates that the file path is within the allowed storage directory
@@ -114,33 +163,23 @@ export async function extractPdfText(
     // Read the PDF file
     const dataBuffer = fs.readFileSync(filePath);
 
-    // Extract text using pdf-parse
-    let pdfData;
+    // Extract text using pdf-parse with fallback
+    let rawText = '';
+    let pageCount = 1;
+
     try {
-      pdfData = await pdfParse(dataBuffer);
+      const pdfData = await pdfParse(dataBuffer);
+      rawText = pdfData.text || '';
+      pageCount = pdfData.numpages || 1;
     } catch (parseError) {
-      
-      // Check if this is a "bad XRef entry" error which indicates a valid PDF
-      // with no extractable text (common for image-only PDFs)
-      const errorMessage = (parseError as Error).message;
-      if (errorMessage.includes('bad XRef entry') || errorMessage.includes('XRef')) {
-        console.log('[PDF Extraction] Detected XRef error - treating as NO_TEXT');
-        return {
-          success: false,
-          error: 'No extractable text found in PDF',
-          code: 'NO_TEXT',
-        };
-      }
-      
-      return {
-        success: false,
-        error: `Failed to parse PDF: ${errorMessage}`,
-        code: 'CORRUPTED_PDF',
-      };
+      console.log(`[PDF Extraction] pdf-parse warning: ${(parseError as Error).message}. Trying stream fallback...`);
+      rawText = fallbackExtractPdfText(dataBuffer);
     }
 
-    // Check if any text was extracted
-    const rawText = pdfData.text || '';
+    if (!rawText || rawText.trim().length === 0) {
+      rawText = fallbackExtractPdfText(dataBuffer);
+    }
+
     const cleanedText = cleanText(rawText);
 
     if (!cleanedText || cleanedText.trim().length === 0) {
@@ -151,11 +190,12 @@ export async function extractPdfText(
       };
     }
 
+
     // Extract page-by-page text
     // Note: pdf-parse doesn't natively provide page-by-page text easily
     // We'll use the numpages and try to split, or use a different approach
     const pages: ExtractedPage[] = [];
-    const pageCount = pdfData.numpages || 1;
+
 
     // For pdf-parse, we get the full text. We can attempt to split by page
     // but it's not always reliable. We'll create a single page entry for now

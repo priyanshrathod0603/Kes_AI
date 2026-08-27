@@ -2,6 +2,9 @@ import { Router, Request, Response } from 'express';
 import { questionPaperService } from '../services/questionPaper.service';
 import { sendSuccess, sendError } from '../utils/response.utils';
 import prisma from '../config/database';
+import { extractPdfText } from '../pdf/extraction/pdf-extraction.service';
+import path from 'path';
+import fs from 'fs';
 
 const router = Router();
 
@@ -12,8 +15,10 @@ const router = Router();
 router.post('/generate', async (req: Request, res: Response) => {
   try {
     const {
-      sourceWorksheetIds,
+      sourceWorksheetIds = [],
       sourceWorksheetTexts = [],
+      sourceDocumentIds = [],
+      studyMaterialIds = [],
       studyMaterialId,
       studyMaterialText,
       className,
@@ -27,8 +32,10 @@ router.post('/generate', async (req: Request, res: Response) => {
       teacherPrompt,
     } = req.body;
 
-    const aggregatedTexts: string[] = [...sourceWorksheetTexts];
+    const aggregatedWorksheetTexts: string[] = [...sourceWorksheetTexts];
+    const aggregatedStudyTexts: string[] = [];
 
+    // 1. Process Source Worksheets
     if (Array.isArray(sourceWorksheetIds) && sourceWorksheetIds.length > 0) {
       const worksheets = await prisma.worksheet.findMany({
         where: { id: { in: sourceWorksheetIds } },
@@ -39,32 +46,88 @@ router.post('/generate', async (req: Request, res: Response) => {
           const qList = parsed.questions
             ?.map((q: any) => `Q.${q.number}: ${q.instruction} ${q.items ? q.items.join('; ') : ''}`)
             .join('\n');
-          aggregatedTexts.push(
+          aggregatedWorksheetTexts.push(
             `Worksheet: ${w.title} (${w.subjectName} - ${w.className})\n${qList}`
           );
         } catch (e) {
-          aggregatedTexts.push(`Worksheet: ${w.title} (${w.subjectName} - ${w.className})`);
+          aggregatedWorksheetTexts.push(`Worksheet: ${w.title} (${w.subjectName} - ${w.className})`);
         }
       }
     }
 
-    let extraStudyText = studyMaterialText || '';
-    if (studyMaterialId && !extraStudyText) {
-      const doc = await prisma.document.findUnique({
-        where: { id: studyMaterialId },
+    // 2. Aggregate Document IDs
+    const rawDocIds = [
+      ...(Array.isArray(sourceDocumentIds) ? sourceDocumentIds : []),
+      ...(Array.isArray(studyMaterialIds) ? studyMaterialIds : []),
+      ...(studyMaterialId ? [studyMaterialId] : []),
+    ].filter(Boolean);
+
+    const docIds = Array.from(new Set(rawDocIds));
+    const storageBaseDir = path.join(process.cwd(), 'storage', 'pdfs');
+
+    if (docIds.length > 0) {
+      const docs = await prisma.document.findMany({
+        where: { id: { in: docIds } },
       });
-      if (doc && doc.extractedText) {
-        extraStudyText = doc.extractedText;
+
+      if (docs.length === 0 && aggregatedWorksheetTexts.length === 0 && !studyMaterialText) {
+        return sendError(res, 'Selected study material document could not be found.', 404);
+      }
+
+      for (const doc of docs) {
+        if (doc.extractedText && doc.extractedText.trim().length > 0) {
+          aggregatedStudyTexts.push(`Document (${doc.title}):\n${doc.extractedText}`);
+        } else if (doc.filePath && fs.existsSync(doc.filePath)) {
+          // On-demand extraction attempt
+          try {
+            console.log(`[Question Paper API] Running on-demand extraction for document: ${doc.title}`);
+            const extractOutcome = await extractPdfText(doc.filePath, storageBaseDir);
+            if ('text' in extractOutcome && extractOutcome.text) {
+              await prisma.document.update({
+                where: { id: doc.id },
+                data: {
+                  extractedText: extractOutcome.text,
+                  extractionStatus: 'COMPLETED',
+                  characterCount: extractOutcome.characterCount,
+                  pageCount: extractOutcome.pageCount,
+                  extractedAt: new Date(),
+                },
+              });
+              aggregatedStudyTexts.push(`Document (${doc.title}):\n${extractOutcome.text}`);
+            }
+          } catch (extractErr) {
+            console.warn(`[Question Paper API] Extraction failed on demand for ${doc.title}:`, extractErr);
+          }
+        }
       }
     }
 
-    if (aggregatedTexts.length === 0 && !extraStudyText) {
-      return sendError(res, 'At least one source worksheet or study material is required', 400);
+    // 3. Include direct text if passed from client (e.g. fresh in-memory upload)
+    if (studyMaterialText && studyMaterialText.trim().length > 0) {
+      aggregatedStudyTexts.push(studyMaterialText.trim());
     }
 
+    // 4. Source Validation
+    if (aggregatedWorksheetTexts.length === 0 && aggregatedStudyTexts.length === 0) {
+      if (docIds.length > 0) {
+        return sendError(
+          res,
+          'The selected study material contains no readable text. Please upload a PDF with extractable text or choose another document.',
+          400
+        );
+      }
+      return sendError(
+        res,
+        'No source material selected. Please upload a reference PDF or select at least one study material / worksheet.',
+        400
+      );
+    }
+
+    const combinedStudyText = aggregatedStudyTexts.join('\n\n');
+
     const qp = await questionPaperService.generateQuestionPaper({
-      sourceWorksheetTexts: aggregatedTexts,
-      studyMaterialText: extraStudyText,
+      sourceWorksheetTexts: aggregatedWorksheetTexts,
+      studyMaterialText: combinedStudyText,
       className,
       subjectName,
       examName,
@@ -75,7 +138,6 @@ router.post('/generate', async (req: Request, res: Response) => {
       difficulty,
       teacherPrompt,
     });
-
 
     return sendSuccess(res, 'Question paper generated successfully', { data: qp });
   } catch (error) {

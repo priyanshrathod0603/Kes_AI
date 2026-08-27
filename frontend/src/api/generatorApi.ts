@@ -93,6 +93,8 @@ export const generatorApi = {
   generateQuestionPaper: async (params: {
     sourceWorksheetIds?: string[];
     sourceWorksheetTexts?: string[];
+    sourceDocumentIds?: string[];
+    studyMaterialIds?: string[];
     studyMaterialId?: string;
     studyMaterialText?: string;
     className: string;
