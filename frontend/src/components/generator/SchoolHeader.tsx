@@ -17,12 +17,13 @@ interface SchoolHeaderProps {
 
 export const SchoolHeader: React.FC<SchoolHeaderProps> = ({
   schoolName = 'KRISHNA ENGLISH SCHOOL',
-  schoolSubHeader = 'Pre-Primary-Primary School',
+  schoolSubHeader = 'Pre-Primary-Primary-Secondary School',
   documentTitle = 'Worksheet FA 1',
   academicYear = '2026-27',
   subjectName = 'ENGLISH',
-  className = 'SR.KG',
+  className = 'Class 1',
   timeAllowed,
+
   totalMarks,
   isQuestionPaper = false,
   classNameCustom,

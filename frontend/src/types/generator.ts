@@ -1,13 +1,17 @@
 export interface WorksheetQuestionItem {
   number: number;
+  section?: string;
   type: string;
   instruction: string;
   marks?: number;
+  passage?: string;
   items?: string[];
   subQuestions?: Array<{
     label: string;
     prompt: string;
+    marks?: number;
     answerBlank?: string;
+    options?: string[];
   }>;
   matchingPairs?: Array<{
     left: string;
@@ -16,6 +20,7 @@ export interface WorksheetQuestionItem {
   options?: string[];
   blankLinesCount?: number;
   visualContext?: string;
+  answerKey?: string;
 }
 
 export interface WorksheetData {
@@ -47,6 +52,7 @@ export interface QuestionPaperData {
   instructions?: string[];
   questions: WorksheetQuestionItem[];
 }
+
 
 export interface PDFAnalysisResult {
   detectedSubject?: string;

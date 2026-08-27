@@ -23,6 +23,26 @@ import {
   FileCheck,
 } from 'lucide-react';
 
+const CLASS_PRESETS = [
+  { group: 'Pre-Primary', items: ['Nursery', 'JR.KG', 'SR.KG'] },
+  { group: 'Primary School', items: ['Class 1', 'Class 2', 'Class 3', 'Class 4', 'Class 5'] },
+  { group: 'Middle School', items: ['Class 6', 'Class 7', 'Class 8'] },
+  { group: 'Secondary & Higher', items: ['Class 9', 'Class 10', 'Class 11', 'Class 12'] },
+];
+
+const SUBJECT_PRESETS = [
+  'ENGLISH',
+  'MATHEMATICS',
+  'EVS / SCIENCE',
+  'SOCIAL SCIENCE',
+  'HINDI',
+  'GUJARATI',
+  'PHYSICS',
+  'CHEMISTRY',
+  'BIOLOGY',
+  'COMPUTER SCIENCE',
+];
+
 export function QuestionPaperGeneratorPage() {
   const { toast } = useToast();
 
@@ -33,12 +53,14 @@ export function QuestionPaperGeneratorPage() {
   // Exam Settings
   const [examName, setExamName] = useState<string>('FA 1 EXAMINATION');
   const [academicYear, setAcademicYear] = useState<string>('2026-27');
-  const [className, setClassName] = useState<string>('SR.KG');
+  const [className, setClassName] = useState<string>('Class 1');
+  const [customClass, setCustomClass] = useState<string>('');
   const [subjectName, setSubjectName] = useState<string>('ENGLISH');
   const [totalMarks, setTotalMarks] = useState<number>(25);
   const [duration, setDuration] = useState<string>('1 Hour');
   const [questionCount, setQuestionCount] = useState<number>(5);
   const [difficulty, setDifficulty] = useState<string>('Medium');
+  const [teacherPrompt, setTeacherPrompt] = useState<string>('');
 
   // Generation state
   const [isGenerating, setIsGenerating] = useState(false);
@@ -85,12 +107,22 @@ export function QuestionPaperGeneratorPage() {
       return;
     }
 
+    const effectiveClass = className === 'custom' ? customClass : className;
+    if (!effectiveClass) {
+      toast({
+        title: 'Class Required',
+        description: 'Please specify the target class/standard.',
+        variant: 'destructive',
+      });
+      return;
+    }
+
     setIsGenerating(true);
     try {
       const result = await generatorApi.generateQuestionPaper({
         sourceWorksheetIds: selectedWorksheetIds,
         studyMaterialId: selectedStudyMaterialId || undefined,
-        className,
+        className: effectiveClass,
         subjectName,
         examName,
         academicYear,
@@ -98,13 +130,14 @@ export function QuestionPaperGeneratorPage() {
         duration,
         questionCount,
         difficulty,
+        teacherPrompt: teacherPrompt.trim() || undefined,
       });
 
       setGeneratedPaper(result);
       refetchSavedPapers();
       toast({
         title: 'Question Paper Generated',
-        description: `${examName} for ${subjectName} (${className}) is ready!`,
+        description: `${examName} for ${subjectName} (${effectiveClass}) is ready!`,
       });
     } catch (err: any) {
       toast({
@@ -144,7 +177,7 @@ export function QuestionPaperGeneratorPage() {
           AI Question Paper Generator
         </h1>
         <p className="text-foreground-muted text-sm sm:text-base">
-          Generate formal school examination papers from worksheets and study material.
+          Generate formal school examination papers with balanced sections and marks blueprints.
         </p>
       </div>
 
@@ -161,7 +194,7 @@ export function QuestionPaperGeneratorPage() {
                 </span>
                 Source Worksheets & Syllabus
               </CardTitle>
-              <CardDescription>Select worksheets to test in this examination</CardDescription>
+              <CardDescription>Select worksheets and/or study materials for this exam</CardDescription>
             </CardHeader>
             <CardContent className="space-y-4">
               <div className="space-y-2 max-h-48 overflow-y-auto pr-1">
@@ -196,7 +229,7 @@ export function QuestionPaperGeneratorPage() {
                   <div className="text-center py-4 text-xs text-foreground-muted bg-muted/40 rounded-lg p-3">
                     <p className="font-medium">No saved worksheets found.</p>
                     <p className="text-[11px] mt-1">
-                      You can select a study material document below as context.
+                      You can select a study material document below as syllabus context.
                     </p>
                   </div>
                 )}
@@ -205,14 +238,14 @@ export function QuestionPaperGeneratorPage() {
               {/* Optional extra study material selection */}
               <div className="pt-2 border-t border-border">
                 <label className="font-semibold text-xs block mb-1">
-                  Optional: Additional Study Material
+                  Reference Study Material Document
                 </label>
                 <select
                   value={selectedStudyMaterialId}
                   onChange={(e) => setSelectedStudyMaterialId(e.target.value)}
                   className="w-full h-8 px-2 rounded-md border border-input bg-surface text-xs"
                 >
-                  <option value="">None (Use worksheets only)</option>
+                  <option value="">None (Use selected worksheets)</option>
                   {documentsData?.data?.map((doc) => (
                     <option key={doc.id} value={doc.id}>
                       {doc.title}
@@ -232,9 +265,56 @@ export function QuestionPaperGeneratorPage() {
                 </span>
                 Examination Settings
               </CardTitle>
-              <CardDescription>Configure marks, duration, and subject details</CardDescription>
+              <CardDescription>Configure grade level, marks distribution, and blueprint</CardDescription>
             </CardHeader>
             <CardContent className="space-y-4">
+              {/* Class & Subject */}
+              <div className="grid grid-cols-2 gap-3 text-xs">
+                <div>
+                  <label className="font-semibold block mb-1">Class / Standard</label>
+                  <select
+                    value={className}
+                    onChange={(e) => setClassName(e.target.value)}
+                    className="w-full h-8 px-2 rounded-md border border-input bg-surface text-xs font-medium"
+                  >
+                    {CLASS_PRESETS.map((grp) => (
+                      <optgroup key={grp.group} label={grp.group}>
+                        {grp.items.map((item) => (
+                          <option key={item} value={item}>
+                            {item}
+                          </option>
+                        ))}
+                      </optgroup>
+                    ))}
+                    <option value="custom">-- Custom Standard --</option>
+                  </select>
+                  {className === 'custom' && (
+                    <Input
+                      value={customClass}
+                      onChange={(e) => setCustomClass(e.target.value)}
+                      placeholder="e.g. Grade 10 - Physics"
+                      className="h-7 text-xs mt-1.5"
+                    />
+                  )}
+                </div>
+                <div>
+                  <label className="font-semibold block mb-1">Subject</label>
+                  <Input
+                    value={subjectName}
+                    onChange={(e) => setSubjectName(e.target.value)}
+                    placeholder="e.g. ENGLISH"
+                    className="h-8 text-xs"
+                    list="qp-subject-presets-list"
+                  />
+                  <datalist id="qp-subject-presets-list">
+                    {SUBJECT_PRESETS.map((sub) => (
+                      <option key={sub} value={sub} />
+                    ))}
+                  </datalist>
+                </div>
+              </div>
+
+              {/* Exam Name & Academic Year */}
               <div className="grid grid-cols-2 gap-3 text-xs">
                 <div>
                   <label className="font-semibold block mb-1">Exam Name</label>
@@ -256,49 +336,41 @@ export function QuestionPaperGeneratorPage() {
                 </div>
               </div>
 
-              <div className="grid grid-cols-2 gap-3 text-xs">
-                <div>
-                  <label className="font-semibold block mb-1">Class / Standard</label>
-                  <Input
-                    value={className}
-                    onChange={(e) => setClassName(e.target.value)}
-                    placeholder="e.g. SR.KG"
-                    className="h-8 text-xs"
-                  />
-                </div>
-                <div>
-                  <label className="font-semibold block mb-1">Subject</label>
-                  <Input
-                    value={subjectName}
-                    onChange={(e) => setSubjectName(e.target.value)}
-                    placeholder="e.g. ENGLISH"
-                    className="h-8 text-xs"
-                  />
-                </div>
-              </div>
-
+              {/* Total Marks & Duration */}
               <div className="grid grid-cols-2 gap-3 text-xs">
                 <div>
                   <label className="font-semibold block mb-1">Total Marks</label>
-                  <Input
-                    type="number"
+                  <select
                     value={totalMarks}
-                    onChange={(e) => setTotalMarks(Number(e.target.value) || 25)}
-                    placeholder="25"
-                    className="h-8 text-xs"
-                  />
+                    onChange={(e) => setTotalMarks(Number(e.target.value))}
+                    className="w-full h-8 px-2 rounded-md border border-input bg-surface text-xs font-medium"
+                  >
+                    <option value={20}>20 Marks (Unit Test)</option>
+                    <option value={25}>25 Marks (Standard FA)</option>
+                    <option value={40}>40 Marks (Mid-Term)</option>
+                    <option value={50}>50 Marks (Terminal)</option>
+                    <option value={80}>80 Marks (Annual Exam)</option>
+                    <option value={100}>100 Marks (Comprehensive)</option>
+                  </select>
                 </div>
                 <div>
                   <label className="font-semibold block mb-1">Time Duration</label>
-                  <Input
+                  <select
                     value={duration}
                     onChange={(e) => setDuration(e.target.value)}
-                    placeholder="e.g. 1 Hour"
-                    className="h-8 text-xs"
-                  />
+                    className="w-full h-8 px-2 rounded-md border border-input bg-surface text-xs font-medium"
+                  >
+                    <option value="45 Minutes">45 Minutes</option>
+                    <option value="1 Hour">1 Hour</option>
+                    <option value="1.5 Hours">1.5 Hours</option>
+                    <option value="2 Hours">2 Hours</option>
+                    <option value="2.5 Hours">2.5 Hours</option>
+                    <option value="3 Hours">3 Hours</option>
+                  </select>
                 </div>
               </div>
 
+              {/* Question Count & Difficulty */}
               <div className="grid grid-cols-2 gap-3 text-xs">
                 <div>
                   <label className="font-semibold block mb-1">Number of Questions</label>
@@ -309,8 +381,10 @@ export function QuestionPaperGeneratorPage() {
                   >
                     <option value={4}>4 Questions</option>
                     <option value={5}>5 Questions (Standard)</option>
+                    <option value={6}>6 Questions</option>
                     <option value={8}>8 Questions</option>
                     <option value={10}>10 Questions</option>
+                    <option value={15}>15 Questions</option>
                   </select>
                 </div>
                 <div>
@@ -328,6 +402,21 @@ export function QuestionPaperGeneratorPage() {
                 </div>
               </div>
 
+              {/* Teacher Special Instructions */}
+              <div className="space-y-1 text-xs">
+                <label className="font-semibold block text-foreground flex items-center justify-between">
+                  <span>Teacher Blueprint / Custom Instructions</span>
+                  <span className="text-[10px] text-foreground-muted font-normal">Optional</span>
+                </label>
+                <textarea
+                  value={teacherPrompt}
+                  onChange={(e) => setTeacherPrompt(e.target.value)}
+                  placeholder="e.g. Include 10 marks of MCQs in Section A, 10 marks of short problems in Section B, and one 5-mark long question in Section C..."
+                  rows={2}
+                  className="w-full p-2 text-xs rounded-md border border-input bg-surface focus:outline-none focus:ring-1 focus:ring-primary-500 leading-relaxed"
+                />
+              </div>
+
               {/* Generate Button */}
               <Button
                 variant="default"
@@ -335,7 +424,6 @@ export function QuestionPaperGeneratorPage() {
                 disabled={isGenerating || (selectedWorksheetIds.length === 0 && !selectedStudyMaterialId)}
                 className="w-full h-10 font-bold flex items-center justify-center gap-2 mt-2 shadow-sm bg-primary-600 hover:bg-primary-700 text-white"
               >
-
                 {isGenerating ? (
                   <>
                     <RefreshCw className="w-4 h-4 animate-spin" />
@@ -351,6 +439,7 @@ export function QuestionPaperGeneratorPage() {
             </CardContent>
           </Card>
         </div>
+
 
         {/* Right Column: Live Printable Preview or History */}
         <div className="lg:col-span-7 space-y-6">

@@ -49,6 +49,7 @@ export const generatorApi = {
     questionCount?: number;
     difficulty?: string;
     questionTypes?: string[];
+    teacherPrompt?: string;
   }): Promise<WorksheetData> => {
     const res = await api.post('/worksheets/generate', params);
     return extractData<WorksheetData>(res);
@@ -102,10 +103,12 @@ export const generatorApi = {
     duration?: string;
     questionCount?: number;
     difficulty?: string;
+    teacherPrompt?: string;
   }): Promise<QuestionPaperData> => {
     const res = await api.post('/question-papers/generate', params);
     return extractData<QuestionPaperData>(res);
   },
+
 
   downloadQuestionPaperPdf: async (questionPaperData: QuestionPaperData): Promise<Blob> => {
     const res = await api.post('/question-papers/export/pdf', { questionPaperData }, {

@@ -40,31 +40,29 @@ The platform provides:
 - **In-Browser Viewer & Binary Download**: View document text in-browser or stream/download original binary PDFs.
 
 ### 3. AI Worksheet Generator
-- **Content-Grounded Generation**: Analyzes uploaded PDFs or existing library materials to extract subjects, standards, chapters, topics, vocabulary, and key concepts.
+- **Universal Multi-Grade Pedagogical Engine**: Dynamically adapts pedagogical style, question formats, and vocabulary based on the target class tier:
+  - **Pre-Primary / Kindergarten (Nursery, JR.KG, SR.KG)**: Visual identification, symbol/emoji clues, missing letters (`A ___ C ___`), what comes before/after/between, count & write, circle/tick the correct answer, odd-one-out.
+  - **Primary (Classes 1–5)**: MCQs with 4 options, fill in the blanks with word banks, true/false, short definitions, arithmetic & word problems, grammar exercises, simple comprehension passages.
+  - **Middle School (Classes 6–8)**: MCQs, fill in blanks, 2-column matching (Column A & B), comparison & distinctions, 2–3 mark short answers, numerical problems, diagram labelling.
+  - **Secondary & Higher (Classes 9–12)**: Multi-section blueprints (Section A Objective/MCQs, Section B Short Answer Type I, Section C Short Answer Type II, Section D Long Answer / Case Studies / Derivations / Numericals).
+- **Teacher Special Prompt / Instructions**: Teachers can give custom directives (e.g. *"Include 2 word problems and 3 definition questions"*, *"Focus on photosynthesis equations"*).
 - **Traditional School Format**: Follows authentic school document layouts with school header, student info lines (`Name: _____`, `Sub.: _____`, `Std: _____`), and balanced question spacing.
-- **Supported Question Types**:
-  - Missing Letters (`A ___ C ___ E`)
-  - What comes before, after, and between
-  - Match the following (Column A & Column B)
-  - Count and write
-  - Circle / Tick the correct answer
-  - Picture identification & naming
-  - Fill in the blanks
-  - Odd-one-out
-  - Short answer questions
-- **Interactive Live Preview**: In-place Teacher Edit mode for questions, instructions, and marks before exporting.
+- **Dynamic Multi-Page Pagination & Word Wrapping**: Automatic word-wrapping and multi-page pagination prevents text overflow.
+- **Interactive Live Preview**: In-place Teacher Edit mode for sections, questions, reading passages, instructions, and marks before exporting.
 - **Dual Export Options**:
-  - **Download PDF**: Printable A4 PDF generated server-side via `pdf-lib`.
+  - **Download PDF**: Printable A4 PDF generated server-side via `pdf-lib` with running headers and page numbers.
   - **Download DOCX**: Editable Microsoft Word `.docx` generated server-side via `docx`.
 - **Worksheet History**: Save generated worksheets to the database for future reference and exam assembly.
 
 ### 4. AI Question Paper Generator
 - **Multi-Worksheet Syllabus Synthesis**: Select one or multiple saved worksheets plus optional study material to create comprehensive examination papers.
-- **Exam Configuration**: Custom exam names (e.g., *FA 1 EXAMINATION*), academic year (e.g., *2026-27*), class, subject, total marks, duration, question count, and difficulty.
-- **Balanced Assessment**: Generates structured question papers with individual question marks, instructions, and time allocations.
-- **Interactive Preview & Teacher Editing**: Edit questions and point allocations live on the page.
-- **Exports**: Instant A4 PDF and editable Microsoft Word `.docx` downloads.
+- **Exam Configuration**: Custom exam names (e.g., *FA 1 EXAMINATION*, *Mid-Term Examination*, *Annual Exam*), academic year (e.g., *2026-27*), class, subject, total marks (20, 25, 40, 50, 80, 100), duration, question count, difficulty, and teacher blueprint prompt.
+- **Mathematically Exact Marks Allocation**: Enforces strict marks validation to guarantee that individual question marks sum precisely to the total marks requested.
+- **Sectioned Examination Blueprints**: Automatically organizes questions into structured examination sections with reading passages and instructions.
+- **Interactive Preview & Teacher Editing**: Edit questions, point allocations, and sections live on the page.
+- **Exports**: Instant multi-page A4 PDF and editable Microsoft Word `.docx` downloads.
 - **Exam History**: Full database persistence with preview and deletion support.
+
 
 ### 5. Academic Management
 - **Classes**: Manage school standards and grade levels.

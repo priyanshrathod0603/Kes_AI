@@ -25,16 +25,40 @@ import {
   RefreshCw,
 } from 'lucide-react';
 
-const QUESTION_TYPE_OPTIONS = [
-  { id: 'missing_letters', label: 'Missing Letters (A ___ C ___)' },
-  { id: 'before_after_between', label: 'What Comes Before / After / Between?' },
-  { id: 'match_the_following', label: 'Match the Following (Column A & B)' },
-  { id: 'count_and_write', label: 'Count & Write (Visual Objects)' },
-  { id: 'circle_correct', label: 'Circle / Tick the Correct Answer' },
-  { id: 'picture_identification', label: 'Picture Identification & Name' },
-  { id: 'fill_in_blanks', label: 'Fill in the Blanks' },
-  { id: 'odd_one_out', label: 'Odd One Out' },
-  { id: 'short_answer', label: 'Short Answer Questions' },
+const CLASS_PRESETS = [
+  { group: 'Pre-Primary', items: ['Nursery', 'JR.KG', 'SR.KG'] },
+  { group: 'Primary School', items: ['Class 1', 'Class 2', 'Class 3', 'Class 4', 'Class 5'] },
+  { group: 'Middle School', items: ['Class 6', 'Class 7', 'Class 8'] },
+  { group: 'Secondary & Higher', items: ['Class 9', 'Class 10', 'Class 11', 'Class 12'] },
+];
+
+const SUBJECT_PRESETS = [
+  'ENGLISH',
+  'MATHEMATICS',
+  'EVS / SCIENCE',
+  'SOCIAL SCIENCE',
+  'HINDI',
+  'GUJARATI',
+  'PHYSICS',
+  'CHEMISTRY',
+  'BIOLOGY',
+  'COMPUTER SCIENCE',
+];
+
+const GENERAL_QUESTION_TYPES = [
+  { id: 'mcq', label: 'Multiple Choice Questions (MCQs)', level: 'All Grades' },
+  { id: 'fill_in_blanks', label: 'Fill in the Blanks', level: 'All Grades' },
+  { id: 'match_the_following', label: 'Match the Following (Columns A & B)', level: 'All Grades' },
+  { id: 'true_false', label: 'True or False Statements', level: 'Primary & Up' },
+  { id: 'short_answer', label: 'Short Answer Questions', level: 'Primary & Up' },
+  { id: 'long_answer', label: 'Long Answer / Descriptive', level: 'Middle & Higher' },
+  { id: 'comprehension', label: 'Reading Comprehension & Passage', level: 'All Grades' },
+  { id: 'numerical', label: 'Word Problems & Numerical Calculations', level: 'Primary & Up' },
+  { id: 'missing_letters', label: 'Missing Letters / Sequence Completion', level: 'Pre-Primary / Early' },
+  { id: 'before_after_between', label: 'What Comes Before / After / Between?', level: 'Pre-Primary / Early' },
+  { id: 'picture_identification', label: 'Picture / Symbol Identification', level: 'Pre-Primary / Early' },
+  { id: 'count_and_write', label: 'Count & Write Visual Objects', level: 'Pre-Primary / Early' },
+  { id: 'odd_one_out', label: 'Odd One Out', level: 'Pre-Primary & Primary' },
 ];
 
 export function WorksheetGeneratorPage() {
@@ -52,7 +76,8 @@ export function WorksheetGeneratorPage() {
   const [analysis, setAnalysis] = useState<PDFAnalysisResult | null>(null);
 
   // Configuration state
-  const [className, setClassName] = useState<string>('SR.KG');
+  const [className, setClassName] = useState<string>('Class 1');
+  const [customClass, setCustomClass] = useState<string>('');
   const [subjectName, setSubjectName] = useState<string>('ENGLISH');
   const [chapterName, setChapterName] = useState<string>('');
   const [topicName, setTopicName] = useState<string>('');
@@ -61,12 +86,10 @@ export function WorksheetGeneratorPage() {
   const [academicYear, setAcademicYear] = useState<string>('2026-27');
   const [questionCount, setQuestionCount] = useState<number>(5);
   const [difficulty, setDifficulty] = useState<string>('Medium');
-  const [selectedTypes, setSelectedTypes] = useState<string[]>([
-    'missing_letters',
-    'before_after_between',
-    'match_the_following',
-    'circle_correct',
-  ]);
+  const [teacherPrompt, setTeacherPrompt] = useState<string>('');
+  const [useAutoTypes, setUseAutoTypes] = useState<boolean>(true);
+  const [selectedTypes, setSelectedTypes] = useState<string[]>([]);
+  const [showAdvancedOptions, setShowAdvancedOptions] = useState<boolean>(false);
 
   // Generation state
   const [isGenerating, setIsGenerating] = useState(false);
@@ -77,7 +100,6 @@ export function WorksheetGeneratorPage() {
     queryKey: ['academic-classes'],
     queryFn: () => academicApi.getClasses(),
   });
-
 
   const { data: documentsData, refetch: refetchDocs } = useQuery({
     queryKey: ['study-materials-library'],
@@ -109,7 +131,6 @@ export function WorksheetGeneratorPage() {
     setAnalysis(null);
 
     try {
-      // Upload PDF to backend to extract text
       const uploadRes = await documentApi.uploadDocument({
         file,
         documentType: 'STUDY_MATERIAL',
@@ -118,10 +139,8 @@ export function WorksheetGeneratorPage() {
       const docId = uploadRes.data?.id;
       if (!docId) throw new Error('Upload succeeded but no document ID returned.');
 
-      // Wait a moment for background extraction or fetch content
       let contentRes = await documentApi.getDocumentContent(docId);
       if (!contentRes?.text) {
-        // Retry once after brief delay
         await new Promise((r) => setTimeout(r, 1200));
         contentRes = await documentApi.getDocumentContent(docId);
       }
@@ -130,7 +149,6 @@ export function WorksheetGeneratorPage() {
       setExtractedContent(text);
       setSelectedDocId(docId);
 
-      // Trigger AI Analysis
       const analysisResult = await generatorApi.analyzePdf({
         extractedText: text,
         fileName: file.name,
@@ -148,7 +166,7 @@ export function WorksheetGeneratorPage() {
 
       toast({
         title: 'Analysis Completed',
-        description: `Scanned ${file.name} successfully.`,
+        description: `Scanned ${file.name} for ${analysisResult.detectedClass || 'curriculum'}!`,
       });
     } catch (err: any) {
       toast({
@@ -215,12 +233,22 @@ export function WorksheetGeneratorPage() {
       return;
     }
 
+    const effectiveClass = className === 'custom' ? customClass : className;
+    if (!effectiveClass) {
+      toast({
+        title: 'Class Required',
+        description: 'Please specify the target class/standard.',
+        variant: 'destructive',
+      });
+      return;
+    }
+
     setIsGenerating(true);
     try {
       const result = await generatorApi.generateWorksheet({
         sourceContent: extractedContent,
         documentId: selectedDocId || undefined,
-        className,
+        className: effectiveClass,
         subjectName,
         chapterName,
         topicName,
@@ -229,14 +257,15 @@ export function WorksheetGeneratorPage() {
         academicYear,
         questionCount,
         difficulty,
-        questionTypes: selectedTypes,
+        questionTypes: useAutoTypes ? undefined : selectedTypes,
+        teacherPrompt: teacherPrompt.trim() || undefined,
       });
 
       setGeneratedWorksheet(result);
       refetchSaved();
       toast({
         title: 'Worksheet Generated',
-        description: `${subjectName} worksheet for ${className} is ready!`,
+        description: `${subjectName} worksheet for ${effectiveClass} is ready!`,
       });
     } catch (err: any) {
       toast({
@@ -250,10 +279,12 @@ export function WorksheetGeneratorPage() {
   };
 
   const toggleQuestionType = (typeId: string) => {
+    setUseAutoTypes(false);
     setSelectedTypes((prev) =>
       prev.includes(typeId) ? prev.filter((t) => t !== typeId) : [...prev, typeId]
     );
   };
+
 
   const handleDeleteSaved = async (id: string, e: React.MouseEvent) => {
     e.stopPropagation();
@@ -428,30 +459,57 @@ export function WorksheetGeneratorPage() {
                 </span>
                 Worksheet Configuration
               </CardTitle>
-              <CardDescription>Customize exam info, class level, and question types</CardDescription>
+              <CardDescription>Multi-class grade level, subject, and customized teacher prompt</CardDescription>
             </CardHeader>
             <CardContent className="space-y-4">
+              {/* Class & Subject Pickers */}
               <div className="grid grid-cols-2 gap-3 text-xs">
                 <div>
                   <label className="font-semibold block mb-1">Class / Standard</label>
-                  <Input
+                  <select
                     value={className}
                     onChange={(e) => setClassName(e.target.value)}
-                    placeholder="e.g. SR.KG, Class 1"
-                    className="h-8 text-xs"
-                  />
+                    className="w-full h-8 px-2 rounded-md border border-input bg-surface text-xs font-medium"
+                  >
+                    {CLASS_PRESETS.map((grp) => (
+                      <optgroup key={grp.group} label={grp.group}>
+                        {grp.items.map((item) => (
+                          <option key={item} value={item}>
+                            {item}
+                          </option>
+                        ))}
+                      </optgroup>
+                    ))}
+                    <option value="custom">-- Custom Standard --</option>
+                  </select>
+                  {className === 'custom' && (
+                    <Input
+                      value={customClass}
+                      onChange={(e) => setCustomClass(e.target.value)}
+                      placeholder="e.g. Grade 10 - Science"
+                      className="h-7 text-xs mt-1.5"
+                    />
+                  )}
                 </div>
+
                 <div>
                   <label className="font-semibold block mb-1">Subject</label>
                   <Input
                     value={subjectName}
                     onChange={(e) => setSubjectName(e.target.value)}
-                    placeholder="e.g. ENGLISH, MATHS"
+                    placeholder="e.g. ENGLISH, MATHS, SCIENCE"
                     className="h-8 text-xs"
+                    list="subject-presets-list"
                   />
+                  <datalist id="subject-presets-list">
+                    {SUBJECT_PRESETS.map((sub) => (
+                      <option key={sub} value={sub} />
+                    ))}
+                  </datalist>
                 </div>
               </div>
 
+              {/* Assessment Name & Academic Year */}
               <div className="grid grid-cols-2 gap-3 text-xs">
                 <div>
                   <label className="font-semibold block mb-1">Exam / Assessment</label>
@@ -473,13 +531,14 @@ export function WorksheetGeneratorPage() {
                 </div>
               </div>
 
+              {/* Chapter & Question Count */}
               <div className="grid grid-cols-2 gap-3 text-xs">
                 <div>
                   <label className="font-semibold block mb-1">Chapter / Topic</label>
                   <Input
                     value={chapterName}
                     onChange={(e) => setChapterName(e.target.value)}
-                    placeholder="e.g. Letters A-Z, Myself"
+                    placeholder="e.g. Plant Life, Fractions"
                     className="h-8 text-xs"
                   />
                 </div>
@@ -490,34 +549,84 @@ export function WorksheetGeneratorPage() {
                     onChange={(e) => setQuestionCount(Number(e.target.value))}
                     className="w-full h-8 px-2 rounded-md border border-input bg-surface text-xs font-medium"
                   >
-                    <option value={3}>3 Questions (Quick)</option>
+                    <option value={3}>3 Questions (Quick Practice)</option>
                     <option value={5}>5 Questions (Standard)</option>
-                    <option value={8}>8 Questions</option>
-                    <option value={10}>10 Questions</option>
-                    <option value={15}>15 Questions</option>
+                    <option value={8}>8 Questions (Comprehensive)</option>
+                    <option value={10}>10 Questions (Full Assessment)</option>
+                    <option value={15}>15 Questions (Mastery)</option>
                   </select>
                 </div>
               </div>
 
-              {/* Question Types Checkboxes */}
-              <div className="space-y-1.5 pt-1">
-                <label className="font-semibold text-xs block">Allowed Question Formats</label>
-                <div className="space-y-1.5 max-h-44 overflow-y-auto pr-1">
-                  {QUESTION_TYPE_OPTIONS.map((opt) => (
-                    <label
-                      key={opt.id}
-                      className="flex items-center gap-2 text-xs p-1.5 rounded hover:bg-muted cursor-pointer transition-colors"
-                    >
-                      <input
-                        type="checkbox"
-                        checked={selectedTypes.includes(opt.id)}
-                        onChange={() => toggleQuestionType(opt.id)}
-                        className="rounded border-border text-primary-600 focus:ring-primary-500 w-3.5 h-3.5"
-                      />
-                      <span className="text-foreground">{opt.label}</span>
-                    </label>
-                  ))}
-                </div>
+              {/* Teacher Special Instructions */}
+              <div className="space-y-1 text-xs">
+                <label className="font-semibold block text-foreground flex items-center justify-between">
+                  <span>Teacher Special Prompt / Instructions</span>
+                  <span className="text-[10px] text-foreground-muted font-normal">Optional</span>
+                </label>
+                <textarea
+                  value={teacherPrompt}
+                  onChange={(e) => setTeacherPrompt(e.target.value)}
+                  placeholder="e.g. Focus on word problems, include 1 reading comprehension passage, and create a 5-mark short answer question on photosynthesis..."
+                  rows={2}
+                  className="w-full p-2 text-xs rounded-md border border-input bg-surface focus:outline-none focus:ring-1 focus:ring-primary-500 leading-relaxed"
+                />
+              </div>
+
+              {/* Advanced Question Formats Accordion */}
+              <div className="border border-border rounded-lg p-2.5 bg-muted/30 text-xs">
+                <button
+                  type="button"
+                  onClick={() => setShowAdvancedOptions(!showAdvancedOptions)}
+                  className="flex items-center justify-between w-full font-semibold text-foreground"
+                >
+                  <span className="flex items-center gap-1.5">
+                    <Layers className="w-3.5 h-3.5 text-primary-600" />
+                    Question Formats: {useAutoTypes ? 'AI Smart Selection (Recommended)' : `${selectedTypes.length} Selected`}
+                  </span>
+                  <span className="text-[11px] text-primary-600 underline">
+                    {showAdvancedOptions ? 'Hide Formats' : 'Customize'}
+                  </span>
+                </button>
+
+                {showAdvancedOptions && (
+                  <div className="mt-3 pt-2.5 border-t border-border space-y-2">
+                    <div className="flex items-center justify-between pb-1 text-[11px]">
+                      <span className="text-foreground-muted">Choose specific question styles:</span>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setUseAutoTypes(true);
+                          setSelectedTypes([]);
+                        }}
+                        className="text-primary-600 font-semibold hover:underline"
+                      >
+                        Reset to Auto
+                      </button>
+                    </div>
+                    <div className="space-y-1 max-h-44 overflow-y-auto pr-1">
+                      {GENERAL_QUESTION_TYPES.map((opt) => (
+                        <label
+                          key={opt.id}
+                          className="flex items-center justify-between text-xs p-1.5 rounded hover:bg-muted cursor-pointer transition-colors"
+                        >
+                          <div className="flex items-center gap-2">
+                            <input
+                              type="checkbox"
+                              checked={!useAutoTypes && selectedTypes.includes(opt.id)}
+                              onChange={() => toggleQuestionType(opt.id)}
+                              className="rounded border-border text-primary-600 focus:ring-primary-500 w-3.5 h-3.5"
+                            />
+                            <span className="text-foreground">{opt.label}</span>
+                          </div>
+                          <span className="text-[10px] text-foreground-muted bg-surface px-1.5 py-0.5 rounded border border-border">
+                            {opt.level}
+                          </span>
+                        </label>
+                      ))}
+                    </div>
+                  </div>
+                )}
               </div>
 
               {/* Generate Action Button */}
@@ -527,7 +636,6 @@ export function WorksheetGeneratorPage() {
                 disabled={isGenerating || isAnalyzing || (!extractedContent && !selectedDocId)}
                 className="w-full h-10 font-bold flex items-center justify-center gap-2 mt-2 shadow-sm bg-primary-600 hover:bg-primary-700 text-white"
               >
-
                 {isGenerating ? (
                   <>
                     <RefreshCw className="w-4 h-4 animate-spin" />
@@ -542,6 +650,7 @@ export function WorksheetGeneratorPage() {
               </Button>
             </CardContent>
           </Card>
+
         </div>
 
         {/* Right Column: Live Printable Preview or History */}

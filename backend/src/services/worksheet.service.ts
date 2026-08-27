@@ -16,14 +16,18 @@ import {
 
 export interface WorksheetQuestionItem {
   number: number;
+  section?: string;
   type: string;
   instruction: string;
   marks?: number;
+  passage?: string;
   items?: string[];
   subQuestions?: Array<{
     label: string;
     prompt: string;
+    marks?: number;
     answerBlank?: string;
+    options?: string[];
   }>;
   matchingPairs?: Array<{
     left: string;
@@ -32,6 +36,7 @@ export interface WorksheetQuestionItem {
   options?: string[];
   blankLinesCount?: number;
   visualContext?: string;
+  answerKey?: string;
 }
 
 export interface WorksheetData {
@@ -63,30 +68,77 @@ export interface WorksheetAnalysisResult {
 
 export class WorksheetService {
   /**
-   * AI Analysis of PDF text content
+   * Helper to categorize class/grade level for pedagogical tuning
+   */
+  private categorizeClassLevel(className: string): 'pre_primary' | 'primary' | 'middle' | 'secondary' {
+    const norm = (className || '').toLowerCase().trim();
+    if (
+      norm.includes('nursery') ||
+      norm.includes('jr') ||
+      norm.includes('sr') ||
+      norm.includes('kg') ||
+      norm.includes('kindergarten') ||
+      norm.includes('lkg') ||
+      norm.includes('ukg') ||
+      norm.includes('pre')
+    ) {
+      return 'pre_primary';
+    }
+    if (
+      norm.includes('1') ||
+      norm.includes('2') ||
+      norm.includes('3') ||
+      norm.includes('4') ||
+      norm.includes('5') ||
+      norm.includes('i') ||
+      norm.includes('ii') ||
+      norm.includes('iii') ||
+      norm.includes('iv') ||
+      norm.includes('v')
+    ) {
+      return 'primary';
+    }
+    if (
+      norm.includes('6') ||
+      norm.includes('7') ||
+      norm.includes('8') ||
+      norm.includes('vi') ||
+      norm.includes('vii') ||
+      norm.includes('viii')
+    ) {
+      return 'middle';
+    }
+    return 'secondary';
+  }
+
+  /**
+   * AI Analysis of PDF text content across all academic levels
    */
   async analyzeContent(extractedText: string, fileName?: string): Promise<WorksheetAnalysisResult> {
-    const systemPrompt = `You are an expert curriculum analyst for Krishna English School (KES).
-Analyze the provided educational study material and extract structured information to assist teachers in generating school worksheets.
-Respond ONLY with a valid JSON object without any markdown code fences or conversational text.`;
+    const systemPrompt = `You are an expert curriculum and educational assessment specialist for Krishna English School (KES).
+Analyze the provided educational study material across any school level (from Kindergarten/Pre-Primary, Primary Classes 1-5, Middle School 6-8, to High School 9-12).
+Extract accurate, syllabus-aligned pedagogical metadata.
+Respond ONLY with a valid JSON object without markdown code blocks or conversational text.`;
 
-    const userPrompt = `Analyze this study material text (Source: ${fileName || 'Uploaded PDF'}):
+    const userPrompt = `Analyze this educational material (Source: ${fileName || 'Uploaded Study Material'}):
 
 """
-${extractedText.slice(0, 12000)}
+${extractedText.slice(0, 14000)}
 """
 
-Extract and return JSON with these exact keys:
+Extract and return a JSON object with these exact keys:
 {
-  "detectedSubject": "Subject name like English, Maths, EVS, Science, Hindi, Gujarati, Social Science",
-  "detectedClass": "Class or standard level like Nursery, JR.KG, SR.KG, Class 1, Class 2, Class 3, Class 4, Class 5, etc.",
-  "detectedChapter": "Chapter title if identifiable or empty string",
-  "detectedTopic": "Main topic or concept or empty string",
-  "keyConcepts": ["Concept 1", "Concept 2", "Concept 3"],
-  "vocabulary": ["Word 1", "Word 2", "Word 3"],
-  "suggestedQuestionTypes": ["missing_letters", "before_after_between", "fill_in_blanks", "match_the_following", "count_and_write", "circle_correct", "tick_correct", "picture_identification", "short_answer", "odd_one_out"],
+  "detectedSubject": "Subject (e.g., English, Mathematics, Environmental Studies, Science, Social Science, Physics, Chemistry, Biology, Hindi, Gujarati, Computer Science)",
+  "detectedClass": "Target standard or level (e.g., Nursery, JR.KG, SR.KG, Class 1, Class 2, Class 3, Class 4, Class 5, Class 6, Class 7, Class 8, Class 9, Class 10, Class 11, Class 12)",
+  "detectedChapter": "Identified chapter title or theme",
+  "detectedTopic": "Main topic / core concept",
+  "keyConcepts": ["Specific concept 1", "Specific concept 2", "Specific concept 3"],
+  "vocabulary": ["Key term 1", "Key term 2", "Key term 3", "Key term 4"],
+  "suggestedQuestionTypes": [
+    "List 4-6 appropriate question format IDs suited for this class level from: mcq, fill_in_blanks, match_the_following, true_false, short_answer, long_answer, comprehension, numerical, diagram_label, missing_letters, before_after_between, picture_identification, count_and_write, odd_one_out, assertion_reason, distinction_table"
+  ],
   "recommendedDifficulty": "Easy" | "Medium" | "Hard" | "Mixed",
-  "summary": "Brief 2-3 sentence overview of this material for school worksheet preparation"
+  "summary": "2-3 sentence academic overview explaining the educational concepts taught in this text"
 }`;
 
     try {
@@ -94,31 +146,34 @@ Extract and return JSON with these exact keys:
         systemPrompt,
         userPrompt,
         temperature: 0.2,
+        maxTokens: 1500,
       });
 
       const cleaned = this.cleanJsonString(response.content);
       const parsed = JSON.parse(cleaned);
       return {
-        detectedSubject: parsed.detectedSubject || 'General',
-        detectedClass: parsed.detectedClass || 'SR.KG',
+        detectedSubject: parsed.detectedSubject || 'General Studies',
+        detectedClass: parsed.detectedClass || 'Class 1',
         detectedChapter: parsed.detectedChapter || '',
         detectedTopic: parsed.detectedTopic || '',
         keyConcepts: Array.isArray(parsed.keyConcepts) ? parsed.keyConcepts : [],
         vocabulary: Array.isArray(parsed.vocabulary) ? parsed.vocabulary : [],
-        suggestedQuestionTypes: Array.isArray(parsed.suggestedQuestionTypes) ? parsed.suggestedQuestionTypes : ['fill_in_blanks', 'missing_letters', 'match_the_following'],
+        suggestedQuestionTypes: Array.isArray(parsed.suggestedQuestionTypes)
+          ? parsed.suggestedQuestionTypes
+          : ['fill_in_blanks', 'mcq', 'short_answer'],
         recommendedDifficulty: parsed.recommendedDifficulty || 'Medium',
         summary: parsed.summary || 'Study material successfully analyzed.',
       };
     } catch (error) {
-      console.error('[WorksheetService] Analysis error, falling back:', error);
+      console.error('[WorksheetService] Analysis error:', error);
       return {
-        detectedSubject: 'English',
-        detectedClass: 'SR.KG',
+        detectedSubject: 'General Studies',
+        detectedClass: 'Class 1',
         detectedChapter: '',
         detectedTopic: '',
-        keyConcepts: ['Foundational literacy and concepts'],
+        keyConcepts: ['Core curriculum concepts'],
         vocabulary: [],
-        suggestedQuestionTypes: ['missing_letters', 'before_after_between', 'match_the_following', 'fill_in_blanks'],
+        suggestedQuestionTypes: ['fill_in_blanks', 'mcq', 'short_answer'],
         recommendedDifficulty: 'Medium',
         summary: 'Study material extracted and ready for worksheet generation.',
       };
@@ -126,7 +181,7 @@ Extract and return JSON with these exact keys:
   }
 
   /**
-   * Generate structured worksheet using AI
+   * Generate structured worksheet using AI adapted to target class level
    */
   async generateWorksheet(params: {
     sourceContent: string;
@@ -140,44 +195,86 @@ Extract and return JSON with these exact keys:
     questionCount?: number;
     difficulty?: string;
     questionTypes?: string[];
+    teacherPrompt?: string;
   }): Promise<WorksheetData> {
     const questionCount = params.questionCount || 5;
     const difficulty = params.difficulty || 'Medium';
     const schoolName = 'KRISHNA ENGLISH SCHOOL';
-    const schoolSubHeader = 'Pre-Primary-Primary School';
+    const schoolSubHeader = 'Pre-Primary-Primary-Secondary School';
     const academicYear = params.academicYear || '2026-27';
     const examName = params.examName || 'Worksheet FA 1';
     const worksheetNumber = params.worksheetNumber || '1';
-    const className = params.className || 'SR.KG';
+    const className = params.className || 'Class 1';
     const subjectName = params.subjectName || 'ENGLISH';
-    const typesToUse = params.questionTypes && params.questionTypes.length > 0
-      ? params.questionTypes.join(', ')
-      : 'missing_letters, what comes before/after/between, match the following, circle/tick the correct answer, count and write, fill in the blanks, picture identification, short answer';
+    const levelCategory = this.categorizeClassLevel(className);
 
-    const systemPrompt = `You are the master worksheet creator for Krishna English School.
-Your task is to generate an authentic school-ready printable worksheet grounded strictly in the provided study material.
+    // Pedagogical instructions tailored by grade tier
+    let levelPedagogy = '';
+    if (levelCategory === 'pre_primary') {
+      levelPedagogy = `
+TARGET LEVEL: Pre-Primary / Kindergarten (${className})
+- Use fun, visual, foundational early-childhood activities.
+- Suitable formats: Missing letters/numbers (e.g. A _ C _ E), What comes before/after/between, Picture identification (use text symbols/emojis like [🍎 🍎 🍎] in visualContext), Match the following (simple everyday objects/words), Count and write, Circle/Tick the correct answer, Odd one out.
+- Keep instructions extremely short and simple (e.g., "Count and write the number in the box.", "Circle the odd one.").`;
+    } else if (levelCategory === 'primary') {
+      levelPedagogy = `
+TARGET LEVEL: Primary School Classes 1 to 5 (${className})
+- Focus on foundational grammar, vocabulary, sentence construction, basic arithmetic / word problems, science observations, and simple reading comprehension.
+- Suitable formats: Fill in the blanks (with word bank provided in visualContext), Multiple Choice Questions (MCQs with 4 options), True or False with simple reason, Match definitions/terms, Short 1-2 sentence questions, Reading passage with 2-3 sub-questions, Simple word problems.`;
+    } else if (levelCategory === 'middle') {
+      levelPedagogy = `
+TARGET LEVEL: Middle School Classes 6 to 8 (${className})
+- Focus on conceptual clarity, scientific definitions, mathematical calculations, historical/geographical facts, grammar rules, and reading comprehension.
+- Suitable formats: Section-based exercises, Multiple Choice Questions (MCQs), Fill in the blanks, Match Column A with Column B, Short Answer questions (2-3 marks), Distinguish between terms / comparison, Diagram labelling descriptions, Step-by-step problem solving.`;
+    } else {
+      levelPedagogy = `
+TARGET LEVEL: Secondary & Higher Classes 9 to 12 (${className})
+- Focus on rigorous academic assessment, critical thinking, problem-solving, analytical comprehension, and structured examination questions.
+- Suitable formats: Structured Sections (Section A: Objective/MCQs/Assertion-Reason, Section B: Short Answer Type, Section C: Long Answer / Analytical / Derivations / Case Studies / Numerical problems).
+- Include comprehensive question stems, proper marks allocation per question, and clear answer prompts.`;
+    }
+
+    const typeConstraints = params.questionTypes && params.questionTypes.length > 0
+      ? `Teacher preferred question formats to incorporate: ${params.questionTypes.join(', ')}`
+      : `Automatically select the most pedagogically sound mix of question formats for ${className} ${subjectName}.`;
+
+    const teacherDirective = params.teacherPrompt
+      ? `\nSPECIAL TEACHER INSTRUCTIONS (Highest Priority!):\n"""\n${params.teacherPrompt}\n"""\n`
+      : '';
+
+    const systemPrompt = `You are the master curriculum author for Krishna English School.
+Your task is to generate an authentic, class-appropriate printable school worksheet grounded strictly in the provided study material.
 Follow the traditional Krishna English School worksheet format:
 - School: ${schoolName}
 - Sub-header: ${schoolSubHeader}
-- Header info: Worksheet ${examName} Year ${academicYear}
-- Student fields: Name: __________, Sub.: ${subjectName}, Std: ${className}
-- Questions should be strictly age/class-appropriate (e.g., Nursery/JR.KG/SR.KG should have missing letters, before/after/between, matching, picture recognition, count and write; higher classes should have structured exercises).
-- Generate exactly ${questionCount} diverse, pedagogical questions.
-- Respond ONLY with valid JSON. Do not include markdown code block backticks (\`\`\`json).`;
+- Document: Worksheet ${examName} (${academicYear})
+- Student details: Name: __________, Sub.: ${subjectName}, Std: ${className}
 
-    const userPrompt = `Study Material Content:
+${levelPedagogy}
+${teacherDirective}
+${typeConstraints}
+
+RULES:
+1. Generate exactly ${questionCount} meaningful, diverse questions strictly based on the extracted study material.
+2. Ensure high academic quality: grammatically correct, factual, age-appropriate difficulty (${difficulty}).
+3. For multiple-choice questions, provide exactly 4 clear options (a, b, c, d).
+4. For matching questions, provide matchingPairs with left and right columns.
+5. For sub-questions (e.g. before/after, series, comprehension sub-parts), provide subQuestions array with labels (a, b, c).
+6. Total marks must be distributed reasonably across questions (typically 20 to 25 marks total).
+7. Respond ONLY with valid JSON. Do not include markdown code block formatting.`;
+
+    const userPrompt = `Source Study Material Content:
 """
-${params.sourceContent.slice(0, 15000)}
+${params.sourceContent.slice(0, 16000)}
 """
 
-Target Parameters:
-- Class/Standard: ${className}
+Target Worksheet Specifications:
+- Class / Standard: ${className}
 - Subject: ${subjectName}
-- Chapter: ${params.chapterName || 'General'}
-- Topic: ${params.topicName || 'General'}
-- Difficulty: ${difficulty}
-- Target Question Count: ${questionCount}
-- Allowed / Preferred Question Types: ${typesToUse}
+- Chapter: ${params.chapterName || 'Curriculum Topics'}
+- Topic: ${params.topicName || 'Key Concepts'}
+- Target Questions Count: ${questionCount}
+- Difficulty Level: ${difficulty}
 
 Return a valid JSON object matching this schema:
 {
@@ -190,35 +287,27 @@ Return a valid JSON object matching this schema:
   "subjectName": "${subjectName}",
   "chapterName": "${params.chapterName || ''}",
   "topicName": "${params.topicName || ''}",
-  "instructions": ["Read each question carefully and write neatly."],
+  "instructions": ["Read each question carefully and write your answers neatly in the space provided."],
   "totalMarks": 25,
   "questions": [
     {
       "number": 1,
-      "type": "missing_letters",
-      "instruction": "Write the missing letters.",
+      "section": "Section A",
+      "type": "mcq | fill_in_blanks | match_the_following | true_false | short_answer | long_answer | numerical | comprehension | missing_letters | before_after_between | picture_identification | count_and_write",
+      "instruction": "Question instruction string",
       "marks": 5,
-      "items": ["A ___ C ___ E ___ G", "M ___ O ___ Q ___ S"]
-    },
-    {
-      "number": 2,
-      "type": "before_after_between",
-      "instruction": "What comes after?",
-      "marks": 5,
+      "passage": "Optional reading passage or case study text",
+      "visualContext": "Optional visual clue description or symbols",
+      "items": ["Item or sentence 1", "Item or sentence 2"],
+      "options": ["Option A", "Option B", "Option C", "Option D"],
       "subQuestions": [
-        {"label": "a)", "prompt": "What comes after B?", "answerBlank": "B ___"},
-        {"label": "b)", "prompt": "What comes after G?", "answerBlank": "G ___"}
-      ]
-    },
-    {
-      "number": 3,
-      "type": "match_the_following",
-      "instruction": "Match Column A with Column B.",
-      "marks": 5,
+        {"label": "a)", "prompt": "Sub-question prompt", "answerBlank": "Optional blank format"}
+      ],
       "matchingPairs": [
-        {"left": "Apple", "right": "Fruit"},
-        {"left": "Cat", "right": "Animal"}
-      ]
+        {"left": "Item 1", "right": "Matching definition 1"}
+      ],
+      "blankLinesCount": 2,
+      "answerKey": "Correct answer / brief explanation"
     }
   ]
 }`;
@@ -230,7 +319,6 @@ Return a valid JSON object matching this schema:
       maxTokens: 4000,
     });
 
-
     const cleaned = this.cleanJsonString(response.content);
     let parsed: WorksheetData;
     try {
@@ -240,7 +328,6 @@ Return a valid JSON object matching this schema:
       throw new Error('AI generated invalid worksheet format. Please try again.');
     }
 
-    // Ensure fallback defaults
     parsed.schoolName = parsed.schoolName || schoolName;
     parsed.schoolSubHeader = parsed.schoolSubHeader || schoolSubHeader;
     parsed.academicYear = parsed.academicYear || academicYear;
@@ -251,6 +338,7 @@ Return a valid JSON object matching this schema:
 
     return parsed;
   }
+
 
   /**
    * Helper to clean JSON string from LLM responses
@@ -271,6 +359,9 @@ Return a valid JSON object matching this schema:
   /**
    * Helper to sanitize text for WinAnsi PDF encoding
    */
+  /**
+   * Helper to sanitize text for WinAnsi PDF encoding
+   */
   private sanitizeForPdf(text: string): string {
     if (!text) return '';
     return text
@@ -283,238 +374,394 @@ Return a valid JSON object matching this schema:
   }
 
   /**
-   * Generate real printable PDF using pdf-lib
+   * Word wrap helper for PDF text drawing
+   */
+  private wrapText(text: string, maxWidth: number, font: any, fontSize: number): string[] {
+    if (!text) return [];
+    const words = text.split(/\s+/);
+    const lines: string[] = [];
+    let currentLine = '';
+
+    for (const word of words) {
+      const testLine = currentLine ? `${currentLine} ${word}` : word;
+      const testWidth = font.widthOfTextAtSize(testLine, fontSize);
+      if (testWidth <= maxWidth) {
+        currentLine = testLine;
+      } else {
+        if (currentLine) lines.push(currentLine);
+        currentLine = word;
+      }
+    }
+    if (currentLine) lines.push(currentLine);
+    return lines;
+  }
+
+  /**
+   * Generate real printable PDF using pdf-lib with dynamic multi-page wrapping
    */
   async generatePdf(data: WorksheetData): Promise<Uint8Array> {
     const pdfDoc = await PDFDocument.create();
     let page = pdfDoc.addPage([595.28, 841.89]); // A4 in points (width x height)
     const fontRegular = await pdfDoc.embedFont(StandardFonts.Helvetica);
     const fontBold = await pdfDoc.embedFont(StandardFonts.HelveticaBold);
+    const fontOblique = await pdfDoc.embedFont(StandardFonts.HelveticaOblique);
 
     const margin = 40;
     const pageWidth = 595.28;
+    const contentWidth = pageWidth - margin * 2;
     let y = 800;
+    let currentPageIndex = 1;
 
     const checkPageBreak = (neededHeight: number) => {
-      if (y - neededHeight < 50) {
+      if (y - neededHeight < 55) {
+        // Draw page footer on old page
+        const footerText = `Page ${currentPageIndex}`;
+        page.drawText(footerText, {
+          x: (pageWidth - fontRegular.widthOfTextAtSize(footerText, 8)) / 2,
+          y: 30,
+          size: 8,
+          font: fontRegular,
+          color: rgb(0.4, 0.4, 0.4),
+        });
+
+        // Add new page
         page = pdfDoc.addPage([595.28, 841.89]);
+        currentPageIndex++;
         y = 800;
-        // Repeat minimal header on continuation
-        page.drawText(this.sanitizeForPdf(`${data.schoolName} - ${data.examName} (${data.className})`), {
+
+        // Repeat minimal header on continuation page
+        const headerText = this.sanitizeForPdf(
+          `${data.schoolName} - ${data.examName} (${data.className} ${data.subjectName})`
+        );
+        page.drawText(headerText, {
           x: margin,
           y,
-          size: 9,
-          font: fontRegular,
+          size: 8.5,
+          font: fontBold,
           color: rgb(0.3, 0.3, 0.3),
+        });
+        page.drawLine({
+          start: { x: margin, y: y - 5 },
+          end: { x: pageWidth - margin, y: y - 5 },
+          thickness: 0.5,
+          color: rgb(0.7, 0.7, 0.7),
         });
         y -= 25;
       }
     };
 
-    // Draw School Header
+    // Draw Primary School Header (Page 1)
     const schoolNameText = this.sanitizeForPdf(data.schoolName.toUpperCase());
     page.drawText(schoolNameText, {
-      x: (pageWidth - fontBold.widthOfTextAtSize(schoolNameText, 15)) / 2,
+      x: (pageWidth - fontBold.widthOfTextAtSize(schoolNameText, 14.5)) / 2,
       y,
-      size: 15,
+      size: 14.5,
       font: fontBold,
-      color: rgb(0.1, 0.1, 0.1),
+      color: rgb(0.08, 0.08, 0.08),
     });
-    y -= 16;
+    y -= 15;
 
     const subHeaderText = this.sanitizeForPdf(data.schoolSubHeader);
     page.drawText(subHeaderText, {
-      x: (pageWidth - fontRegular.widthOfTextAtSize(subHeaderText, 10)) / 2,
+      x: (pageWidth - fontRegular.widthOfTextAtSize(subHeaderText, 9.5)) / 2,
       y,
-      size: 10,
+      size: 9.5,
       font: fontRegular,
-      color: rgb(0.2, 0.2, 0.2),
+      color: rgb(0.25, 0.25, 0.25),
     });
-    y -= 16;
+    y -= 15;
 
-    const examTitle = this.sanitizeForPdf(`Worksheet ${data.examName} Year ${data.academicYear}`);
+    const examTitle = this.sanitizeForPdf(
+      `Worksheet ${data.examName} · Academic Year ${data.academicYear}`
+    );
     page.drawText(examTitle, {
-      x: (pageWidth - fontBold.widthOfTextAtSize(examTitle, 11)) / 2,
+      x: (pageWidth - fontBold.widthOfTextAtSize(examTitle, 10.5)) / 2,
       y,
-      size: 11,
+      size: 10.5,
       font: fontBold,
       color: rgb(0.1, 0.1, 0.1),
     });
-    y -= 14;
+    y -= 12;
 
-    // Header separator line
+    // Header divider line
     page.drawLine({
       start: { x: margin, y },
       end: { x: pageWidth - margin, y },
-      thickness: 1,
-      color: rgb(0.2, 0.2, 0.2),
+      thickness: 1.2,
+      color: rgb(0.15, 0.15, 0.15),
     });
-    y -= 18;
+    y -= 16;
 
     // Student Details
-    const nameText = 'Name: __________________________________________________';
+    const nameText = 'Name: _______________________________________________________________';
     page.drawText(nameText, {
       x: margin,
       y,
-      size: 10.5,
+      size: 9.5,
       font: fontBold,
       color: rgb(0, 0, 0),
     });
-    y -= 18;
+    y -= 16;
 
-    const subStdText = this.sanitizeForPdf(`Sub.: ${data.subjectName.toUpperCase()}                     Std: ${data.className.toUpperCase()}`);
+    const subStdText = this.sanitizeForPdf(
+      `Std / Class: ${data.className.toUpperCase()}            Subject: ${data.subjectName.toUpperCase()}${
+        data.totalMarks ? `            Max Marks: ${data.totalMarks}` : ''
+      }`
+    );
     page.drawText(subStdText, {
       x: margin,
       y,
-      size: 10.5,
+      size: 9.5,
       font: fontBold,
       color: rgb(0, 0, 0),
     });
-    y -= 12;
+    y -= 10;
 
-    // Second separator line
     page.drawLine({
       start: { x: margin, y },
       end: { x: pageWidth - margin, y },
       thickness: 0.75,
       color: rgb(0.3, 0.3, 0.3),
     });
-    y -= 22;
+    y -= 18;
+
+    let currentSection = '';
 
     // Render Questions
     for (const q of data.questions) {
-      checkPageBreak(80);
+      // Check for section header change
+      if (q.section && q.section !== currentSection) {
+        currentSection = q.section;
+        checkPageBreak(40);
+        y -= 6;
+        const secText = this.sanitizeForPdf(q.section.toUpperCase());
+        page.drawText(secText, {
+          x: (pageWidth - fontBold.widthOfTextAtSize(secText, 10.5)) / 2,
+          y,
+          size: 10.5,
+          font: fontBold,
+          color: rgb(0.15, 0.15, 0.15),
+        });
+        y -= 14;
+      }
 
-      // Question Title / Instruction
-      const qHead = this.sanitizeForPdf(`Q.${q.number}  ${q.instruction}${q.marks ? `  [${q.marks} Marks]` : ''}`);
-      page.drawText(qHead, {
-        x: margin,
-        y,
-        size: 10.5,
-        font: fontBold,
-        color: rgb(0, 0, 0),
-      });
-      y -= 18;
+      checkPageBreak(50);
 
-      // Visual context if present
-      if (q.visualContext) {
-        checkPageBreak(25);
-        page.drawText(this.sanitizeForPdf(`[ ${q.visualContext} ]`), {
-          x: margin + 20,
+      // Question Title & Marks
+      const qHeadPrefix = this.sanitizeForPdf(`Q.${q.number}  `);
+      const instructionText = this.sanitizeForPdf(q.instruction);
+      const marksText = q.marks ? this.sanitizeForPdf(`  [${q.marks} Marks]`) : '';
+
+      const wrappedInstruction = this.wrapText(
+        instructionText + marksText,
+        contentWidth - 30,
+        fontBold,
+        10
+      );
+
+      for (let i = 0; i < wrappedInstruction.length; i++) {
+        checkPageBreak(16);
+        const prefix = i === 0 ? qHeadPrefix : '     ';
+        page.drawText(prefix + wrappedInstruction[i], {
+          x: margin,
           y,
           size: 10,
-          font: fontRegular,
-          color: rgb(0.2, 0.2, 0.2),
+          font: fontBold,
+          color: rgb(0, 0, 0),
         });
-        y -= 18;
+        y -= 15;
       }
 
-      // 1. Missing letters or standard items
+      // Reading Passage or Case Study if present
+      if (q.passage) {
+        checkPageBreak(40);
+        y -= 4;
+        const wrappedPassage = this.wrapText(
+          this.sanitizeForPdf(q.passage),
+          contentWidth - 40,
+          fontOblique,
+          9
+        );
+        for (const pLine of wrappedPassage) {
+          checkPageBreak(14);
+          page.drawText(pLine, {
+            x: margin + 20,
+            y,
+            size: 9,
+            font: fontOblique,
+            color: rgb(0.2, 0.2, 0.2),
+          });
+          y -= 13;
+        }
+        y -= 4;
+      }
+
+      // Visual context / Word bank
+      if (q.visualContext) {
+        checkPageBreak(20);
+        const ctxWrapped = this.wrapText(
+          this.sanitizeForPdf(`[ ${q.visualContext} ]`),
+          contentWidth - 40,
+          fontRegular,
+          9
+        );
+        for (const cLine of ctxWrapped) {
+          page.drawText(cLine, {
+            x: margin + 20,
+            y,
+            size: 9,
+            font: fontRegular,
+            color: rgb(0.3, 0.3, 0.3),
+          });
+          y -= 14;
+        }
+      }
+
+      // 1. Items or missing letters
       if (q.items && q.items.length > 0) {
         for (const item of q.items) {
-          checkPageBreak(25);
-          page.drawText(this.sanitizeForPdf(item), {
-            x: margin + 20,
-            y,
-            size: 11,
-            font: fontRegular,
-            color: rgb(0, 0, 0),
-          });
-          y -= 22;
+          const itemLines = this.wrapText(this.sanitizeForPdf(item), contentWidth - 40, fontRegular, 10);
+          for (const iLine of itemLines) {
+            checkPageBreak(18);
+            page.drawText(iLine, {
+              x: margin + 20,
+              y,
+              size: 10,
+              font: fontRegular,
+              color: rgb(0, 0, 0),
+            });
+            y -= 16;
+          }
+          y -= 4;
         }
       }
 
-      // 2. Sub-questions (e.g. before/after, short questions)
+      // 2. Sub-questions
       if (q.subQuestions && q.subQuestions.length > 0) {
         for (const sq of q.subQuestions) {
-          checkPageBreak(25);
-          const sqText = this.sanitizeForPdf(`${sq.label}  ${sq.answerBlank || sq.prompt}`);
-          page.drawText(sqText, {
-            x: margin + 20,
-            y,
-            size: 10,
-            font: fontRegular,
-            color: rgb(0, 0, 0),
-          });
-          y -= 20;
+          const sqPrompt = this.sanitizeForPdf(
+            `${sq.label}  ${sq.prompt}${sq.marks ? ` [${sq.marks}M]` : ''} ${sq.answerBlank || ''}`
+          );
+          const sqLines = this.wrapText(sqPrompt, contentWidth - 40, fontRegular, 9.5);
+          for (const sLine of sqLines) {
+            checkPageBreak(16);
+            page.drawText(sLine, {
+              x: margin + 20,
+              y,
+              size: 9.5,
+              font: fontRegular,
+              color: rgb(0, 0, 0),
+            });
+            y -= 15;
+          }
+
+          // Options within sub-question if any
+          if (sq.options && sq.options.length > 0) {
+            checkPageBreak(16);
+            const optLine = this.sanitizeForPdf(
+              sq.options.map((opt, oIdx) => `(${String.fromCharCode(97 + oIdx)}) ${opt}`).join('    ')
+            );
+            page.drawText(optLine, {
+              x: margin + 35,
+              y,
+              size: 9,
+              font: fontRegular,
+              color: rgb(0.15, 0.15, 0.15),
+            });
+            y -= 14;
+          }
         }
       }
 
-      // 3. Match the following
+      // 3. Match the Following
       if (q.matchingPairs && q.matchingPairs.length > 0) {
-        checkPageBreak(q.matchingPairs.length * 22 + 20);
-        // Header for columns
+        checkPageBreak(q.matchingPairs.length * 20 + 30);
         page.drawText('Column A', {
-          x: margin + 30,
+          x: margin + 25,
           y,
           size: 9.5,
           font: fontBold,
           color: rgb(0.2, 0.2, 0.2),
         });
         page.drawText('Column B', {
-          x: margin + 260,
+          x: margin + 270,
           y,
           size: 9.5,
           font: fontBold,
           color: rgb(0.2, 0.2, 0.2),
         });
-        y -= 16;
+        y -= 15;
 
         for (let i = 0; i < q.matchingPairs.length; i++) {
           const pair = q.matchingPairs[i];
-          page.drawText(this.sanitizeForPdf(`${i + 1}.  ${pair.left}`), {
-            x: margin + 30,
+          const leftText = this.sanitizeForPdf(`${i + 1}.  ${pair.left}`);
+          const rightText = this.sanitizeForPdf(`(    )  ${String.fromCharCode(65 + i)}.  ${pair.right}`);
+
+          page.drawText(leftText, {
+            x: margin + 25,
             y,
-            size: 10,
+            size: 9.5,
             font: fontRegular,
             color: rgb(0, 0, 0),
           });
-          page.drawText(this.sanitizeForPdf(`(    )   ${String.fromCharCode(65 + i)}.  ${pair.right}`), {
-            x: margin + 240,
+          page.drawText(rightText, {
+            x: margin + 250,
             y,
-            size: 10,
+            size: 9.5,
             font: fontRegular,
             color: rgb(0, 0, 0),
           });
-          y -= 20;
+          y -= 18;
         }
       }
 
-      // 4. Options (for MCQ, circle/tick)
+      // 4. Options for MCQs
       if (q.options && q.options.length > 0) {
         checkPageBreak(25);
         const optLine = this.sanitizeForPdf(
-          q.options.map((opt, idx) => `( ${String.fromCharCode(97 + idx)} ) ${opt}`).join('    ')
+          q.options.map((opt, idx) => `(${String.fromCharCode(97 + idx)}) ${opt}`).join('      ')
         );
-        page.drawText(optLine, {
-          x: margin + 20,
-          y,
-          size: 10,
-          font: fontRegular,
-          color: rgb(0, 0, 0),
-        });
-        y -= 22;
+        const optLines = this.wrapText(optLine, contentWidth - 40, fontRegular, 9.5);
+        for (const oLine of optLines) {
+          page.drawText(oLine, {
+            x: margin + 20,
+            y,
+            size: 9.5,
+            font: fontRegular,
+            color: rgb(0, 0, 0),
+          });
+          y -= 16;
+        }
       }
 
-      // 5. Blank answer lines if needed
-      const lines = q.blankLinesCount || (q.type === 'short_answer' ? 2 : 0);
+      // 5. Blank Answer Lines
+      const lines = q.blankLinesCount || (q.type === 'short_answer' || q.type === 'long_answer' ? 2 : 0);
       for (let l = 0; l < lines; l++) {
-        checkPageBreak(20);
+        checkPageBreak(18);
         page.drawLine({
           start: { x: margin + 20, y },
           end: { x: pageWidth - margin - 20, y },
           thickness: 0.5,
-          color: rgb(0.6, 0.6, 0.6),
+          color: rgb(0.65, 0.65, 0.65),
         });
-        y -= 20;
+        y -= 18;
       }
 
-      y -= 14; // Space between questions
+      y -= 10; // Space between questions
     }
+
+    // Final page footer
+    const finalFooter = `Page ${currentPageIndex}`;
+    page.drawText(finalFooter, {
+      x: (pageWidth - fontRegular.widthOfTextAtSize(finalFooter, 8)) / 2,
+      y: 30,
+      size: 8,
+      font: fontRegular,
+      color: rgb(0.4, 0.4, 0.4),
+    });
 
     return await pdfDoc.save();
   }
-
 
   /**
    * Generate real editable DOCX using docx package
@@ -526,35 +773,35 @@ Return a valid JSON object matching this schema:
     docChildren.push(
       new Paragraph({
         alignment: AlignmentType.CENTER,
-        spacing: { before: 100, after: 60 },
+        spacing: { before: 100, after: 40 },
         children: [
           new TextRun({
             text: data.schoolName.toUpperCase(),
             bold: true,
-            size: 30, // 15pt
+            size: 28, // 14pt
             font: 'Helvetica',
           }),
         ],
       }),
       new Paragraph({
         alignment: AlignmentType.CENTER,
-        spacing: { before: 0, after: 60 },
+        spacing: { before: 0, after: 40 },
         children: [
           new TextRun({
             text: data.schoolSubHeader,
-            size: 20, // 10pt
+            size: 19, // 9.5pt
             font: 'Helvetica',
           }),
         ],
       }),
       new Paragraph({
         alignment: AlignmentType.CENTER,
-        spacing: { before: 0, after: 140 },
+        spacing: { before: 0, after: 120 },
         children: [
           new TextRun({
-            text: `Worksheet ${data.examName} Year ${data.academicYear}`,
+            text: `Worksheet ${data.examName} · Academic Year ${data.academicYear}`,
             bold: true,
-            size: 22, // 11pt
+            size: 21,
             font: 'Helvetica',
           }),
         ],
@@ -564,44 +811,66 @@ Return a valid JSON object matching this schema:
     // Student info block
     docChildren.push(
       new Paragraph({
-        spacing: { before: 60, after: 60 },
+        spacing: { before: 40, after: 40 },
         children: [
           new TextRun({
             text: 'Name: ____________________________________________________________________',
             bold: true,
-            size: 20,
+            size: 19,
           }),
         ],
       }),
       new Paragraph({
-        spacing: { before: 40, after: 160 },
+        spacing: { before: 20, after: 140 },
         children: [
           new TextRun({
-            text: `Sub.: ${data.subjectName.toUpperCase()}                                                   Std: ${data.className.toUpperCase()}`,
+            text: `Std / Class: ${data.className.toUpperCase()}            Subject: ${data.subjectName.toUpperCase()}${
+              data.totalMarks ? `            Max Marks: ${data.totalMarks}` : ''
+            }`,
             bold: true,
-            size: 20,
+            size: 19,
           }),
         ],
       })
     );
 
+    let currentSection = '';
+
     // Questions
     for (const q of data.questions) {
+      if (q.section && q.section !== currentSection) {
+        currentSection = q.section;
+        docChildren.push(
+          new Paragraph({
+            alignment: AlignmentType.CENTER,
+            spacing: { before: 180, after: 80 },
+            children: [
+              new TextRun({
+                text: q.section.toUpperCase(),
+                bold: true,
+                size: 21,
+                font: 'Helvetica',
+              }),
+            ],
+          })
+        );
+      }
+
       docChildren.push(
         new Paragraph({
-          spacing: { before: 140, after: 60 },
+          spacing: { before: 120, after: 40 },
           children: [
             new TextRun({
               text: `Q.${q.number}  ${q.instruction}`,
               bold: true,
-              size: 21,
+              size: 20,
             }),
             ...(q.marks
               ? [
                   new TextRun({
                     text: `   [${q.marks} Marks]`,
                     bold: true,
-                    size: 19,
+                    size: 18,
                   }),
                 ]
               : []),
@@ -609,15 +878,31 @@ Return a valid JSON object matching this schema:
         })
       );
 
+      if (q.passage) {
+        docChildren.push(
+          new Paragraph({
+            indent: { left: 300, right: 300 },
+            spacing: { before: 40, after: 60 },
+            children: [
+              new TextRun({
+                text: q.passage,
+                italics: true,
+                size: 18,
+              }),
+            ],
+          })
+        );
+      }
+
       if (q.visualContext) {
         docChildren.push(
           new Paragraph({
-            spacing: { before: 40, after: 60 },
+            spacing: { before: 30, after: 40 },
             children: [
               new TextRun({
                 text: `[ ${q.visualContext} ]`,
                 italics: true,
-                size: 20,
+                size: 18,
               }),
             ],
           })
@@ -629,11 +914,11 @@ Return a valid JSON object matching this schema:
           docChildren.push(
             new Paragraph({
               indent: { left: 400 },
-              spacing: { before: 40, after: 60 },
+              spacing: { before: 30, after: 40 },
               children: [
                 new TextRun({
                   text: item,
-                  size: 22,
+                  size: 20,
                 }),
               ],
             })
@@ -646,11 +931,13 @@ Return a valid JSON object matching this schema:
           docChildren.push(
             new Paragraph({
               indent: { left: 400 },
-              spacing: { before: 40, after: 60 },
+              spacing: { before: 30, after: 40 },
               children: [
                 new TextRun({
-                  text: `${sq.label}  ${sq.answerBlank || sq.prompt}`,
-                  size: 20,
+                  text: `${sq.label}  ${sq.prompt}${sq.marks ? ` [${sq.marks}M]` : ''} ${
+                    sq.answerBlank || ''
+                  }`,
+                  size: 19,
                 }),
               ],
             })
@@ -672,7 +959,7 @@ Return a valid JSON object matching this schema:
                 },
                 children: [
                   new Paragraph({
-                    children: [new TextRun({ text: 'Column A', bold: true, size: 20 })],
+                    children: [new TextRun({ text: 'Column A', bold: true, size: 19 })],
                   }),
                 ],
               }),
@@ -686,7 +973,7 @@ Return a valid JSON object matching this schema:
                 },
                 children: [
                   new Paragraph({
-                    children: [new TextRun({ text: 'Column B', bold: true, size: 20 })],
+                    children: [new TextRun({ text: 'Column B', bold: true, size: 19 })],
                   }),
                 ],
               }),
@@ -705,8 +992,8 @@ Return a valid JSON object matching this schema:
                     },
                     children: [
                       new Paragraph({
-                        spacing: { before: 40, after: 40 },
-                        children: [new TextRun({ text: `${idx + 1}.  ${pair.left}`, size: 20 })],
+                        spacing: { before: 30, after: 30 },
+                        children: [new TextRun({ text: `${idx + 1}.  ${pair.left}`, size: 19 })],
                       }),
                     ],
                   }),
@@ -719,11 +1006,11 @@ Return a valid JSON object matching this schema:
                     },
                     children: [
                       new Paragraph({
-                        spacing: { before: 40, after: 40 },
+                        spacing: { before: 30, after: 30 },
                         children: [
                           new TextRun({
                             text: `(    )  ${String.fromCharCode(65 + idx)}.  ${pair.right}`,
-                            size: 20,
+                            size: 19,
                           }),
                         ],
                       }),
@@ -746,27 +1033,27 @@ Return a valid JSON object matching this schema:
         docChildren.push(
           new Paragraph({
             indent: { left: 400 },
-            spacing: { before: 40, after: 60 },
+            spacing: { before: 30, after: 40 },
             children: [
               new TextRun({
-                text: q.options.map((opt, i) => `( ${String.fromCharCode(97 + i)} ) ${opt}`).join('      '),
-                size: 20,
+                text: q.options.map((opt, i) => `(${String.fromCharCode(97 + i)}) ${opt}`).join('      '),
+                size: 19,
               }),
             ],
           })
         );
       }
 
-      const lines = q.blankLinesCount || (q.type === 'short_answer' ? 2 : 0);
+      const lines = q.blankLinesCount || (q.type === 'short_answer' || q.type === 'long_answer' ? 2 : 0);
       for (let l = 0; l < lines; l++) {
         docChildren.push(
           new Paragraph({
-            spacing: { before: 60, after: 60 },
+            spacing: { before: 50, after: 50 },
             children: [
               new TextRun({
                 text: '_________________________________________________________________________________',
                 color: '888888',
-                size: 16,
+                size: 15,
               }),
             ],
           })
@@ -794,6 +1081,7 @@ Return a valid JSON object matching this schema:
 
     return await Packer.toBuffer(doc);
   }
+
 
   /**
    * Save worksheet to database

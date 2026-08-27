@@ -239,6 +239,24 @@ export const WorksheetPreview: React.FC<WorksheetPreviewProps> = ({
         <div className="space-y-6 pt-3">
           {worksheet.questions.map((q, qIndex) => (
             <div key={qIndex} className="space-y-2.5 pb-2">
+              {/* Section Header if present or different from prev */}
+              {q.section && (qIndex === 0 || worksheet.questions[qIndex - 1].section !== q.section) && (
+                <div className="text-center my-3 border-y border-slate-300 py-1.5 bg-slate-50/60 font-bold text-xs sm:text-sm tracking-wider uppercase text-slate-800">
+                  {isEditing ? (
+                    <Input
+                      value={q.section}
+                      onChange={(e) =>
+                        updateQuestion(qIndex, { ...q, section: e.target.value })
+                      }
+                      className="h-7 text-xs font-bold text-center"
+                      placeholder="e.g. SECTION A: OBJECTIVE QUESTIONS"
+                    />
+                  ) : (
+                    <span>{q.section}</span>
+                  )}
+                </div>
+              )}
+
               {/* Question Instruction */}
               <div className="flex items-start justify-between gap-2">
                 <div className="font-bold text-sm sm:text-base flex-1">
@@ -266,7 +284,25 @@ export const WorksheetPreview: React.FC<WorksheetPreviewProps> = ({
                 )}
               </div>
 
-              {/* Visual Context / Image Clues if available */}
+              {/* Reading Passage / Case Study Context */}
+              {q.passage && (
+                <div className="ml-4 pl-3 border-l-2 border-primary-500 bg-slate-50/80 p-3 rounded-r text-xs leading-relaxed text-slate-800">
+                  {isEditing ? (
+                    <Textarea
+                      value={q.passage}
+                      onChange={(e) =>
+                        updateQuestion(qIndex, { ...q, passage: e.target.value })
+                      }
+                      placeholder="Reading passage or case study context..."
+                      className="text-xs min-h-[60px]"
+                    />
+                  ) : (
+                    <p className="italic">{q.passage}</p>
+                  )}
+                </div>
+              )}
+
+              {/* Visual Context / Image Clues / Word Bank */}
               {q.visualContext && (
                 <div className="pl-6 text-xs text-slate-600 italic bg-slate-50 p-2 rounded border border-slate-200">
                   {isEditing ? (
@@ -275,11 +311,11 @@ export const WorksheetPreview: React.FC<WorksheetPreviewProps> = ({
                       onChange={(e) =>
                         updateQuestion(qIndex, { ...q, visualContext: e.target.value })
                       }
-                      placeholder="Visual clue / illustration prompt"
+                      placeholder="Visual clue / word bank"
                       className="h-7 text-xs"
                     />
                   ) : (
-                    <span>Context / Visual Clue: {q.visualContext}</span>
+                    <span>[ {q.visualContext} ]</span>
                   )}
                 </div>
               )}
@@ -309,40 +345,52 @@ export const WorksheetPreview: React.FC<WorksheetPreviewProps> = ({
                 </div>
               )}
 
-              {/* Sub-Questions (e.g. What comes before/after, short prompts) */}
+              {/* Sub-Questions */}
               {q.subQuestions && q.subQuestions.length > 0 && (
                 <div className="pl-6 space-y-2">
                   {q.subQuestions.map((sq, sqIdx) => (
-                    <div key={sqIdx} className="flex items-center text-sm font-medium text-slate-900">
-                      <span className="w-8 font-bold text-slate-700">{sq.label}</span>
-                      {isEditing ? (
-                        <div className="flex-1 flex gap-2">
-                          <Input
-                            value={sq.prompt}
-                            onChange={(e) => {
-                              const newSq = [...(q.subQuestions || [])];
-                              newSq[sqIdx] = { ...sq, prompt: e.target.value };
-                              updateQuestion(qIndex, { ...q, subQuestions: newSq });
-                            }}
-                            className="h-7 text-xs"
-                          />
-                          <Input
-                            value={sq.answerBlank || ''}
-                            placeholder="Blank template (e.g. M ___)"
-                            onChange={(e) => {
-                              const newSq = [...(q.subQuestions || [])];
-                              newSq[sqIdx] = { ...sq, answerBlank: e.target.value };
-                              updateQuestion(qIndex, { ...q, subQuestions: newSq });
-                            }}
-                            className="h-7 text-xs w-36"
-                          />
-                        </div>
-                      ) : (
-                        <div className="flex-1 flex items-center justify-between border-b border-dotted border-slate-400 pb-1">
-                          <span>{sq.prompt}</span>
-                          <span className="font-mono font-bold tracking-wider mr-4">
-                            {sq.answerBlank || '________'}
-                          </span>
+                    <div key={sqIdx} className="space-y-1 text-sm font-medium text-slate-900">
+                      <div className="flex items-center">
+                        <span className="w-8 font-bold text-slate-700">{sq.label}</span>
+                        {isEditing ? (
+                          <div className="flex-1 flex gap-2">
+                            <Input
+                              value={sq.prompt}
+                              onChange={(e) => {
+                                const newSq = [...(q.subQuestions || [])];
+                                newSq[sqIdx] = { ...sq, prompt: e.target.value };
+                                updateQuestion(qIndex, { ...q, subQuestions: newSq });
+                              }}
+                              className="h-7 text-xs"
+                            />
+                            <Input
+                              value={sq.answerBlank || ''}
+                              placeholder="Blank format (e.g. M ___)"
+                              onChange={(e) => {
+                                const newSq = [...(q.subQuestions || [])];
+                                newSq[sqIdx] = { ...sq, answerBlank: e.target.value };
+                                updateQuestion(qIndex, { ...q, subQuestions: newSq });
+                              }}
+                              className="h-7 text-xs w-36"
+                            />
+                          </div>
+                        ) : (
+                          <div className="flex-1 flex items-center justify-between border-b border-dotted border-slate-400 pb-1">
+                            <span>{sq.prompt}</span>
+                            <span className="font-mono font-bold tracking-wider mr-4">
+                              {sq.answerBlank || '________'}
+                            </span>
+                          </div>
+                        )}
+                      </div>
+                      {/* Sub-question options if present */}
+                      {sq.options && sq.options.length > 0 && (
+                        <div className="pl-8 flex flex-wrap gap-3 pt-0.5 text-xs text-slate-700">
+                          {sq.options.map((sOpt, sOptIdx) => (
+                            <span key={sOptIdx} className="bg-slate-100 px-2 py-0.5 rounded border border-slate-200">
+                              ({String.fromCharCode(97 + sOptIdx)}) {sOpt}
+                            </span>
+                          ))}
                         </div>
                       )}
                     </div>
@@ -421,10 +469,14 @@ export const WorksheetPreview: React.FC<WorksheetPreviewProps> = ({
                 </div>
               )}
 
-              {/* Blank writing spaces for written / short answers */}
-              {((q.blankLinesCount && q.blankLinesCount > 0) || q.type === 'short_answer') && (
+              {/* Blank writing spaces for written / short / long answers */}
+              {((q.blankLinesCount && q.blankLinesCount > 0) ||
+                q.type === 'short_answer' ||
+                q.type === 'long_answer') && (
                 <div className="pl-6 space-y-3 pt-2">
-                  {Array.from({ length: q.blankLinesCount || 2 }).map((_, lIdx) => (
+                  {Array.from({
+                    length: q.blankLinesCount || (q.type === 'long_answer' ? 4 : 2),
+                  }).map((_, lIdx) => (
                     <div
                       key={lIdx}
                       className="w-full border-b border-dashed border-slate-300 h-5"
@@ -435,6 +487,7 @@ export const WorksheetPreview: React.FC<WorksheetPreviewProps> = ({
             </div>
           ))}
         </div>
+
       </div>
     </div>
   );

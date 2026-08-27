@@ -55,6 +55,7 @@ router.post('/generate', async (req: Request, res: Response) => {
       questionCount,
       difficulty,
       questionTypes,
+      teacherPrompt,
     } = req.body;
 
     let content = sourceContent;
@@ -83,7 +84,9 @@ router.post('/generate', async (req: Request, res: Response) => {
       questionCount: Number(questionCount) || 5,
       difficulty,
       questionTypes,
+      teacherPrompt,
     });
+
 
     return sendSuccess(res, 'Worksheet generated successfully', { data: worksheet });
   } catch (error) {

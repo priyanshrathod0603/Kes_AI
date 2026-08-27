@@ -24,6 +24,7 @@ router.post('/generate', async (req: Request, res: Response) => {
       duration,
       questionCount,
       difficulty,
+      teacherPrompt,
     } = req.body;
 
     const aggregatedTexts: string[] = [...sourceWorksheetTexts];
@@ -72,7 +73,9 @@ router.post('/generate', async (req: Request, res: Response) => {
       duration: duration || '1 Hour',
       questionCount: Number(questionCount) || 5,
       difficulty,
+      teacherPrompt,
     });
+
 
     return sendSuccess(res, 'Question paper generated successfully', { data: qp });
   } catch (error) {
