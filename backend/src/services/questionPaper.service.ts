@@ -33,7 +33,7 @@ export class QuestionPaperService {
   /**
    * Helper to categorize class/grade level for examination structure
    */
-  private categorizeClassLevel(className: string): 'pre_primary' | 'primary' | 'middle' | 'secondary' {
+  categorizeClassLevel(className: string): 'pre_primary' | 'primary' | 'middle' | 'secondary' {
     const norm = (className || '').toLowerCase().trim();
     if (
       norm.includes('nursery') ||
@@ -47,31 +47,83 @@ export class QuestionPaperService {
     ) {
       return 'pre_primary';
     }
+    // Check Secondary (9 to 12) first so '10' doesn't match '1'
     if (
-      norm.includes('1') ||
-      norm.includes('2') ||
-      norm.includes('3') ||
-      norm.includes('4') ||
-      norm.includes('5') ||
-      norm.includes('i') ||
-      norm.includes('ii') ||
-      norm.includes('iii') ||
-      norm.includes('iv') ||
-      norm.includes('v')
+      /\b(9|10|11|12|ix|x|xi|xii)\b/.test(norm) ||
+      norm.includes('secondary') ||
+      norm.includes('higher') ||
+      norm.includes('class 9') ||
+      norm.includes('class 10') ||
+      norm.includes('class 11') ||
+      norm.includes('class 12') ||
+      norm.includes('std 9') ||
+      norm.includes('std 10') ||
+      norm.includes('std 11') ||
+      norm.includes('std 12') ||
+      norm.includes('grade 9') ||
+      norm.includes('grade 10') ||
+      norm.includes('grade 11') ||
+      norm.includes('grade 12')
     ) {
-      return 'primary';
+      return 'secondary';
     }
+    // Check Middle (6 to 8)
     if (
-      norm.includes('6') ||
-      norm.includes('7') ||
-      norm.includes('8') ||
-      norm.includes('vi') ||
-      norm.includes('vii') ||
-      norm.includes('viii')
+      /\b(6|7|8|vi|vii|viii)\b/.test(norm) ||
+      norm.includes('middle') ||
+      norm.includes('class 6') ||
+      norm.includes('class 7') ||
+      norm.includes('class 8') ||
+      norm.includes('std 6') ||
+      norm.includes('std 7') ||
+      norm.includes('std 8') ||
+      norm.includes('grade 6') ||
+      norm.includes('grade 7') ||
+      norm.includes('grade 8')
     ) {
       return 'middle';
     }
-    return 'secondary';
+    // Primary (1 to 5)
+    if (
+      /\b(1|2|3|4|5|i|ii|iii|iv|v)\b/.test(norm) ||
+      norm.includes('primary') ||
+      norm.includes('class 1') ||
+      norm.includes('class 2') ||
+      norm.includes('class 3') ||
+      norm.includes('class 4') ||
+      norm.includes('class 5')
+    ) {
+      return 'primary';
+    }
+    return 'primary';
+  }
+
+  /**
+   * Intelligently compact and slice large context to respect context limits
+   */
+  private prepareContext(sourceWorksheetTexts: string[], studyMaterialText?: string): string {
+    const parts: string[] = [];
+
+    if (sourceWorksheetTexts && sourceWorksheetTexts.length > 0) {
+      sourceWorksheetTexts.forEach((text, i) => {
+        if (text && text.trim()) {
+          parts.push(`=== SOURCE WORKSHEET ${i + 1} ===\n${text.trim()}`);
+        }
+      });
+    }
+
+    if (studyMaterialText && studyMaterialText.trim()) {
+      const trimmed = studyMaterialText.trim();
+      if (trimmed.length > 14000) {
+        const head = trimmed.slice(0, 7000);
+        const tail = trimmed.slice(trimmed.length - 6000);
+        parts.push(`=== STUDY MATERIAL / CHAPTER REFERENCE (Sampled for Context) ===\n${head}\n\n[...]\n\n${tail}`);
+      } else {
+        parts.push(`=== STUDY MATERIAL / CHAPTER REFERENCE ===\n${trimmed}`);
+      }
+    }
+
+    return parts.join('\n\n');
   }
 
   /**
@@ -89,9 +141,11 @@ export class QuestionPaperService {
     questionCount?: number;
     difficulty?: string;
     teacherPrompt?: string;
+    schoolName?: string;
+    schoolSubHeader?: string;
   }): Promise<QuestionPaperData> {
-    const schoolName = 'KRISHNA ENGLISH SCHOOL';
-    const schoolSubHeader = 'Pre-Primary-Primary-Secondary School';
+    const schoolName = params.schoolName || 'KRISHNA ENGLISH SCHOOL';
+    const schoolSubHeader = params.schoolSubHeader || 'Pre-Primary-Primary-Secondary School';
     const academicYear = params.academicYear || '2026-27';
     const examName = params.examName || 'FA 1 EXAMINATION';
     const className = params.className || 'Class 1';
@@ -102,52 +156,57 @@ export class QuestionPaperService {
     const difficulty = params.difficulty || 'Medium';
     const levelCategory = this.categorizeClassLevel(className);
 
-    const aggregatedContext = [
-      ...params.sourceWorksheetTexts.map((text, i) => `=== WORKSHEET ${i + 1} SOURCE ===\n${text}`),
-      params.studyMaterialText ? `=== STUDY MATERIAL REFERENCE ===\n${params.studyMaterialText}` : '',
-    ].filter(Boolean).join('\n\n');
+    const aggregatedContext = this.prepareContext(params.sourceWorksheetTexts, params.studyMaterialText);
 
-    // Section and examination blueprints by academic tier
+    // Section and examination blueprints strictly tailored by academic tier
     let examBlueprint = '';
     if (levelCategory === 'pre_primary') {
       examBlueprint = `
 EXAM BLUEPRINT: Pre-Primary / Kindergarten (${className})
-- Design interactive, visual, foundational evaluation questions.
-- Question formats: Missing letters/numbers in sequence, What comes before/after/between, Picture/Symbol recognition with clues, Matching items, Count and write, Circle/Tick correct options.
-- Divide marks evenly across questions so the sum equals exactly ${totalMarks} Marks.`;
+- Design interactive, visual, foundational evaluation questions suitable for early learners.
+- Permitted Question Formats:
+  1. Missing letters / sequence completion
+  2. What comes before / after / between
+  3. Picture / Symbol recognition with text clues (use visualContext)
+  4. Matching items (Column A to Column B)
+  5. Count and write / Circle the correct number or item
+  6. Simple Multiple Choice / Tick the correct answer
+- Do NOT use heavy essay, long answer, or complex secondary questions.
+- Distribute marks evenly across questions so the sum equals exactly ${totalMarks} Marks.`;
     } else if (levelCategory === 'primary') {
       examBlueprint = `
 EXAM BLUEPRINT: Primary School Classes 1 to 5 (${className})
-- Structure into organized sections:
-  * Section A: Objective & Vocabulary (MCQs / Fill in blanks / Match pairs)
-  * Section B: Short Questions & Application (Grammar / Math problems / Short answers)
-- Total marks allocated to all questions MUST sum to exactly ${totalMarks} Marks.`;
+- Structure into organized, age-appropriate examination sections:
+  * SECTION A: OBJECTIVE & VOCABULARY (MCQs, Fill in the blanks, True/False, Match the following) [1 Mark each]
+  * SECTION B: SHORT QUESTIONS & CONCEPT APPLICATION (Grammar exercises, Math problems, Short 1-2 sentence answers) [2-3 Marks each]
+- Ensure language and question difficulty match Class 1-5 standards. Do NOT use kindergarten missing letter formats unless specifically requested.
+- Total marks allocated across all questions MUST sum to exactly ${totalMarks} Marks.`;
     } else if (levelCategory === 'middle') {
       examBlueprint = `
 EXAM BLUEPRINT: Middle School Classes 6 to 8 (${className})
-- Formal exam blueprint with section dividers:
-  * Section A: Objective / Multiple Choice (1 Mark each)
-  * Section B: Short Answer Questions / Conceptual (2-3 Marks each)
-  * Section C: Long Answer / Analytical / Problem Solving (4-5 Marks each)
-- Total marks allocated across all questions MUST sum to exactly ${totalMarks} Marks.`;
+- Formal exam blueprint with section hierarchy:
+  * SECTION A: OBJECTIVE & CONCEPTUAL (MCQs, One-word/One-sentence answers) [1 Mark each]
+  * SECTION B: SHORT ANSWER & DIFFERENTIATION (Short explanations, Definitions, Problem solving, Differentiate between) [2-3 Marks each]
+  * SECTION C: LONG ANSWER & ANALYTICAL (Descriptive answers, Diagram-based questions, Step-by-step problem solving) [4-5 Marks each]
+- Ground all questions strictly in the source concepts. Total marks MUST sum to exactly ${totalMarks} Marks.`;
     } else {
       examBlueprint = `
 EXAM BLUEPRINT: Secondary & Higher Classes 9 to 12 (${className})
 - Formal board-style examination paper with structured sections:
-  * Section A: Multiple Choice Questions (MCQs) & Assertion-Reason (1 Mark each)
-  * Section B: Short Answer Type I (2 Marks each)
-  * Section C: Short Answer Type II (3 Marks each)
-  * Section D: Long Answer / Case Studies / Numerical Derivations (5 Marks each)
-- Total marks allocated across all questions MUST sum to exactly ${totalMarks} Marks.`;
+  * SECTION A: OBJECTIVE TYPE & ASSERTION-REASON (MCQs, Assertion-Reasoning, 1-Mark short facts) [1 Mark each]
+  * SECTION B: SHORT ANSWER TYPE I (Conceptual definitions, 2-mark calculations/formulas) [2 Marks each]
+  * SECTION C: SHORT ANSWER TYPE II (3-mark derivations, experimental setups, chemical equations, mathematical proofs) [3 Marks each]
+  * SECTION D: LONG ANSWER & CASE STUDY (5-mark comprehensive problem solving, case study passage with sub-questions, detailed derivations) [4-5 Marks each]
+- Maintain rigorous secondary school standards. Total marks across all questions MUST sum to exactly ${totalMarks} Marks.`;
     }
 
     const teacherDirective = params.teacherPrompt
-      ? `\nTEACHER SPECIAL BLUEPRINT INSTRUCTIONS (Highest Priority!):\n"""\n${params.teacherPrompt}\n"""\n`
+      ? `\nTEACHER SPECIAL BLUEPRINT INSTRUCTIONS (Highest Priority - Override defaults if specified):\n"""\n${params.teacherPrompt}\n"""\n`
       : '';
 
     const systemPrompt = `You are the master examination controller and paper setter for Krishna English School.
 Create a formal, balanced, syllabus-aligned examination question paper based on the curriculum content taught in the provided worksheets and study material.
-Follow the traditional Krishna English School examination format:
+Follow the formal examination format:
 - School: ${schoolName}
 - Sub-header: ${schoolSubHeader}
 - Exam: ${examName} (${academicYear})
@@ -157,15 +216,17 @@ ${examBlueprint}
 ${teacherDirective}
 
 STRICT RULES:
-1. Synthesize fresh examination questions testing the underlying concepts rather than copying verbatim.
+1. Synthesize fresh examination questions testing the underlying concepts grounded directly in the uploaded source content.
 2. Generate approximately ${questionCount} structured questions.
 3. MATHEMATICAL VALIDATION: Every question MUST have an explicit "marks" integer, and the SUM of marks for all questions MUST equal exactly ${totalMarks}.
-4. Difficulty Level: ${difficulty}.
-5. Respond ONLY with valid JSON. Do not include markdown code block formatting.`;
+4. Sub-questions: If a question has "subQuestions", their individual marks MUST sum up to the question's total "marks".
+5. Difficulty Level: ${difficulty}.
+6. Keep instructions, questions, and answerKeys concise (1-2 lines each) so the entire JSON is compact, complete, and fits within limits.
+7. Respond ONLY with valid JSON. Do not include markdown code block formatting or commentary.`;
 
     const userPrompt = `Curriculum & Syllabus Content (Source Materials):
 """
-${aggregatedContext.slice(0, 16000)}
+${aggregatedContext}
 """
 
 Target Examination Specifications:
@@ -215,13 +276,13 @@ Return a valid JSON object matching this schema:
       "answerKey": "Answer summary / marking criteria"
     }
   ]
-}`;
+} focus on conciseness so the entire output JSON is complete.`;
 
     const response = await aiService.generateAuto({
       systemPrompt,
       userPrompt,
       temperature: 0.25,
-      maxTokens: 4000,
+      maxTokens: 5000,
     });
 
     const cleaned = this.cleanJsonString(response.content);
@@ -242,25 +303,139 @@ Return a valid JSON object matching this schema:
     parsed.duration = parsed.duration || duration;
     parsed.totalMarks = parsed.totalMarks || totalMarks;
 
-    // Mathematical Marks Validation & Graceful Normalization
-    if (parsed.questions && parsed.questions.length > 0) {
-      let currentSum = 0;
-      for (const q of parsed.questions) {
-        if (!q.marks || q.marks < 1) q.marks = 1;
-        currentSum += q.marks;
-      }
-
-      if (currentSum !== totalMarks) {
-        const diff = totalMarks - currentSum;
-        const lastQ = parsed.questions[parsed.questions.length - 1];
-        lastQ.marks = Math.max(1, (lastQ.marks || 1) + diff);
-      }
-    }
+    // Mathematical Marks Validation & Exact Normalization
+    this.normalizeMarks(parsed, totalMarks);
 
     return parsed;
   }
 
+  /**
+   * Regenerates a single question inside an existing question paper
+   */
+  async regenerateSingleQuestion(params: {
+    questionIndex: number;
+    currentQuestion: WorksheetQuestionItem;
+    allQuestions: WorksheetQuestionItem[];
+    className: string;
+    subjectName: string;
+    totalMarks: number;
+    targetMarks?: number;
+    sourceContext?: string;
+    teacherPrompt?: string;
+  }): Promise<WorksheetQuestionItem> {
+    const className = params.className || 'Class 1';
+    const subjectName = params.subjectName || 'ENGLISH';
+    const targetMarks = params.targetMarks || params.currentQuestion.marks || 5;
+    const levelCategory = this.categorizeClassLevel(className);
+
+    const existingInstructions = params.allQuestions
+      .filter((_, idx) => idx !== params.questionIndex)
+      .map((q) => `Q.${q.number}: ${q.instruction}`)
+      .join('\n');
+
+    const systemPrompt = `You are the master examination controller for Krishna English School.
+Regenerate a single, high-quality examination question for Class: ${className}, Subject: ${subjectName}.
+Target Question Marks: ${targetMarks}.
+Class Level Category: ${levelCategory}.
+
+STRICT REQUIREMENTS:
+1. Generate a NEW, syllabus-aligned question grounded in the source curriculum.
+2. Do NOT duplicate any of the other existing questions on the paper.
+3. The question marks MUST equal exactly ${targetMarks}.
+4. If sub-questions are included, their marks MUST sum up to exactly ${targetMarks}.
+5. Respond ONLY with a valid JSON object matching the single question schema.`;
+
+    const userPrompt = `Source Curriculum Context:
+"""
+${(params.sourceContext || '').slice(0, 8000)}
+"""
+
+Existing Questions on Paper (Do not duplicate!):
+${existingInstructions || 'None'}
+
+Current Question being replaced:
+Type: ${params.currentQuestion.type}
+Instruction: ${params.currentQuestion.instruction}
+Target Marks: ${targetMarks}
+Section: ${params.currentQuestion.section || 'SECTION A'}
+${params.teacherPrompt ? `Teacher Instructions: ${params.teacherPrompt}` : ''}
+
+Return a valid JSON object for this single question:
+{
+  "number": ${params.currentQuestion.number || params.questionIndex + 1},
+  "section": "${params.currentQuestion.section || 'SECTION A'}",
+  "type": "${params.currentQuestion.type || 'short_answer'}",
+  "instruction": "Fresh question instruction",
+  "marks": ${targetMarks},
+  "passage": "Optional passage or case study",
+  "visualContext": "Optional visual clue",
+  "items": ["Optional item list"],
+  "options": ["Optional option A", "Optional option B", "Optional option C", "Optional option D"],
+  "subQuestions": [
+    {"label": "a)", "prompt": "Sub-question prompt", "marks": 1, "answerBlank": "Optional blank"}
+  ],
+  "matchingPairs": [
+    {"left": "Item 1", "right": "Matching item 1"}
+  ],
+  "blankLinesCount": 2,
+  "answerKey": "Summary of answers"
+}`;
+
+    const response = await aiService.generateAuto({
+      systemPrompt,
+      userPrompt,
+      temperature: 0.3,
+      maxTokens: 1500,
+    });
+
+    const cleaned = this.cleanJsonString(response.content);
+    let regeneratedQ: WorksheetQuestionItem;
+    try {
+      regeneratedQ = JSON.parse(cleaned);
+    } catch (e) {
+      console.error('[QuestionPaperService] Failed to parse regenerated question JSON:', response.content);
+      throw new Error('AI generated invalid question structure for single question regeneration.');
+    }
+
+    regeneratedQ.number = params.currentQuestion.number || params.questionIndex + 1;
+    regeneratedQ.marks = targetMarks;
+
+    return regeneratedQ;
+  }
+
+  /**
+   * Mathematically validates and normalizes questions marks to equal totalMarks exactly
+   */
+  normalizeMarks(parsed: QuestionPaperData, targetTotal: number) {
+    if (!parsed.questions || parsed.questions.length === 0) return;
+
+    let currentSum = 0;
+    for (const q of parsed.questions) {
+      if (!q.marks || q.marks < 1) q.marks = 1;
+      currentSum += q.marks;
+    }
+
+    if (currentSum !== targetTotal) {
+      const diff = targetTotal - currentSum;
+      const lastQ = parsed.questions[parsed.questions.length - 1];
+      lastQ.marks = Math.max(1, (lastQ.marks || 1) + diff);
+    }
+
+    // Re-verify sub-questions
+    for (const q of parsed.questions) {
+      if (q.subQuestions && q.subQuestions.length > 0) {
+        let subSum = q.subQuestions.reduce((acc, sq) => acc + (sq.marks || 1), 0);
+        if (subSum !== q.marks) {
+          const subDiff = (q.marks || 1) - subSum;
+          const lastSq = q.subQuestions[q.subQuestions.length - 1];
+          lastSq.marks = Math.max(1, (lastSq.marks || 1) + subDiff);
+        }
+      }
+    }
+  }
+
   private cleanJsonString(str: string): string {
+    if (!str) return '{}';
     let s = str.trim();
     if (s.startsWith('```json')) {
       s = s.slice(7);
@@ -269,6 +444,51 @@ Return a valid JSON object matching this schema:
     }
     if (s.endsWith('```')) {
       s = s.slice(0, -3);
+    }
+    s = s.trim();
+
+    // Find bounding braces
+    const firstBrace = s.indexOf('{');
+    const lastBrace = s.lastIndexOf('}');
+    if (firstBrace !== -1 && lastBrace !== -1 && lastBrace > firstBrace) {
+      s = s.substring(firstBrace, lastBrace + 1);
+    } else if (firstBrace !== -1) {
+      s = s.substring(firstBrace);
+      // Attempt simple closure if truncated
+      let openBraces = 0;
+      let openBrackets = 0;
+      let inString = false;
+      let escaped = false;
+      for (let i = 0; i < s.length; i++) {
+        const c = s[i];
+        if (escaped) {
+          escaped = false;
+          continue;
+        }
+        if (c === '\\') {
+          escaped = true;
+          continue;
+        }
+        if (c === '"') {
+          inString = !inString;
+          continue;
+        }
+        if (!inString) {
+          if (c === '{') openBraces++;
+          else if (c === '}') openBraces--;
+          else if (c === '[') openBrackets++;
+          else if (c === ']') openBrackets--;
+        }
+      }
+      if (inString) s += '"';
+      while (openBrackets > 0) {
+        s += ']';
+        openBrackets--;
+      }
+      while (openBraces > 0) {
+        s += '}';
+        openBraces--;
+      }
     }
     return s.trim();
   }

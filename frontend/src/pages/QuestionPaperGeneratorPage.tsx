@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useRef } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { generatorApi } from '@/api/generatorApi';
 import { documentApi } from '@/api/documentApi';
@@ -20,6 +20,10 @@ import {
   Eye,
   RefreshCw,
   X,
+  BookOpen,
+  Layers,
+  AlertCircle,
+  HelpCircle,
 } from 'lucide-react';
 
 const CLASS_PRESETS = [
@@ -44,15 +48,22 @@ const SUBJECT_PRESETS = [
 
 export function QuestionPaperGeneratorPage() {
   const { toast } = useToast();
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
   // Source selection tabs & state
   const [sourceTab, setSourceTab] = useState<'upload' | 'library' | 'worksheets'>('upload');
   const [uploadedFile, setUploadedFile] = useState<File | null>(null);
   const [uploadedDocId, setUploadedDocId] = useState<string>('');
   const [uploadedFileName, setUploadedFileName] = useState<string>('');
+  const [uploadedFileSize, setUploadedFileSize] = useState<string>('');
   const [extractedContent, setExtractedContent] = useState<string>('');
   const [selectedDocIds, setSelectedDocIds] = useState<string[]>([]);
   const [selectedWorksheetIds, setSelectedWorksheetIds] = useState<string[]>([]);
+
+  // Drag & drop state
+  const [isDragging, setIsDragging] = useState(false);
+  const [uploadProgress, setUploadProgress] = useState<number | null>(null);
+  const [uploadError, setUploadError] = useState<string | null>(null);
 
   // Scanning & Analysis state
   const [isScanning, setIsScanning] = useState(false);
@@ -90,12 +101,15 @@ export function QuestionPaperGeneratorPage() {
     queryFn: () => generatorApi.getSavedQuestionPapers(),
   });
 
-  // Handle Direct PDF Upload
-  const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (!file) return;
+  const formatFileSize = (bytes: number): string => {
+    if (bytes < 1024) return `${bytes} B`;
+    if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
+    return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
+  };
 
-    if (file.type !== 'application/pdf') {
+  const processUploadedFile = async (file: File) => {
+    if (file.type !== 'application/pdf' && !file.name.toLowerCase().endsWith('.pdf')) {
+      setUploadError('Only PDF files are supported.');
       toast({
         title: 'Invalid File',
         description: 'Please upload a valid PDF document.',
@@ -104,12 +118,16 @@ export function QuestionPaperGeneratorPage() {
       return;
     }
 
+    setUploadError(null);
     setUploadedFile(file);
     setUploadedFileName(file.name);
+    setUploadedFileSize(formatFileSize(file.size));
     setIsScanning(true);
+    setUploadProgress(20);
     setAnalysis(null);
 
     try {
+      setUploadProgress(40);
       const uploadRes = await documentApi.uploadDocument({
         file,
         documentType: 'STUDY_MATERIAL',
@@ -120,15 +138,17 @@ export function QuestionPaperGeneratorPage() {
 
       setUploadedDocId(docId);
       refetchDocs();
+      setUploadProgress(70);
 
       let contentRes = await documentApi.getDocumentContent(docId);
       if (!contentRes?.text) {
-        await new Promise((r) => setTimeout(r, 1200));
+        await new Promise((r) => setTimeout(r, 1000));
         contentRes = await documentApi.getDocumentContent(docId);
       }
 
       const text = contentRes?.text || 'Study material uploaded.';
       setExtractedContent(text);
+      setUploadProgress(85);
 
       const analysisResult = await generatorApi.analyzePdf({
         extractedText: text,
@@ -140,12 +160,14 @@ export function QuestionPaperGeneratorPage() {
       if (analysisResult.detectedClass) setClassName(analysisResult.detectedClass);
       if (analysisResult.detectedSubject) setSubjectName(analysisResult.detectedSubject.toUpperCase());
 
+      setUploadProgress(100);
       toast({
         title: 'PDF Uploaded & Scanned',
         description: `Successfully analyzed ${file.name} for ${analysisResult.detectedClass || 'curriculum'}!`,
       });
     } catch (err: any) {
       console.error('[Upload Error]', err);
+      setUploadError(err.message || 'Failed to scan uploaded reference PDF.');
       toast({
         title: 'Upload/Analysis Error',
         description: err.message || 'Failed to scan uploaded reference PDF.',
@@ -153,6 +175,51 @@ export function QuestionPaperGeneratorPage() {
       });
     } finally {
       setIsScanning(false);
+      setTimeout(() => setUploadProgress(null), 800);
+    }
+  };
+
+  // Handle Direct PDF Upload via input change
+  const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (file) {
+      processUploadedFile(file);
+    }
+  };
+
+  // Drag & drop handlers
+  const handleDragOver = (e: React.DragEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    setIsDragging(true);
+  };
+
+  const handleDragLeave = (e: React.DragEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    setIsDragging(false);
+  };
+
+  const handleDrop = (e: React.DragEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    setIsDragging(false);
+    const file = e.dataTransfer.files?.[0];
+    if (file) {
+      processUploadedFile(file);
+    }
+  };
+
+  const handleRemoveUploadedFile = () => {
+    setUploadedFile(null);
+    setUploadedFileName('');
+    setUploadedFileSize('');
+    setUploadedDocId('');
+    setExtractedContent('');
+    setAnalysis(null);
+    setUploadError(null);
+    if (fileInputRef.current) {
+      fileInputRef.current.value = '';
     }
   };
 
@@ -209,7 +276,7 @@ export function QuestionPaperGeneratorPage() {
     if (!hasAnySource) {
       toast({
         title: 'Source Required',
-        description: 'Please upload a reference PDF or select at least one study material / worksheet.',
+        description: 'Please upload a PDF, select a study material document, or select at least one worksheet.',
         variant: 'destructive',
       });
       return;
@@ -302,9 +369,11 @@ export function QuestionPaperGeneratorPage() {
                 <span className="flex h-6 w-6 items-center justify-center rounded-full bg-primary-100 text-primary-700 text-xs font-bold">
                   1
                 </span>
-                Source Worksheets & Study Material
+                Source Worksheets & Syllabus
               </CardTitle>
-              <CardDescription>Upload a reference PDF or select existing materials from library</CardDescription>
+              <CardDescription>
+                Choose the material from which the AI should prepare the examination paper.
+              </CardDescription>
             </CardHeader>
             <CardContent className="space-y-4">
               {/* Tab Selector */}
@@ -347,50 +416,144 @@ export function QuestionPaperGeneratorPage() {
               {/* Tab 1: Upload Reference PDF */}
               {sourceTab === 'upload' && (
                 <div className="space-y-3">
-                  <div className="border-2 border-dashed border-border rounded-xl p-5 text-center hover:border-primary-400 transition-colors">
-                    <input
-                      type="file"
-                      id="qp-pdf-upload"
-                      accept="application/pdf"
-                      className="hidden"
-                      onChange={handleFileUpload}
-                    />
-                    <label
-                      htmlFor="qp-pdf-upload"
-                      className="cursor-pointer flex flex-col items-center gap-2"
+                  {!uploadedFileName ? (
+                    <div
+                      onDragOver={handleDragOver}
+                      onDragLeave={handleDragLeave}
+                      onDrop={handleDrop}
+                      className={`border-2 border-dashed rounded-xl p-6 text-center transition-all cursor-pointer ${
+                        isDragging
+                          ? 'border-primary-500 bg-primary-50/50 dark:bg-primary-950/40'
+                          : 'border-border hover:border-primary-400 bg-surface'
+                      }`}
+                      onClick={() => fileInputRef.current?.click()}
                     >
-                      <div className="h-10 w-10 rounded-full bg-primary-50 dark:bg-primary-950 flex items-center justify-center text-primary-600">
-                        <Upload className="h-5 w-5" />
+                      <input
+                        type="file"
+                        ref={fileInputRef}
+                        id="qp-pdf-upload"
+                        accept="application/pdf"
+                        className="hidden"
+                        onChange={handleFileUpload}
+                      />
+                      <div className="flex flex-col items-center gap-2.5">
+                        <div className="h-12 w-12 rounded-full bg-primary-50 dark:bg-primary-950 flex items-center justify-center text-primary-600">
+                          <Upload className="h-6 w-6" />
+                        </div>
+                        <div>
+                          <p className="text-sm font-bold text-foreground">
+                            Upload PDF / Drop PDF Here
+                          </p>
+                          <p className="text-xs text-foreground-muted mt-1">
+                            Chapter book, curriculum notes, or question bank PDF
+                          </p>
+                        </div>
                       </div>
-                      <span className="text-xs font-semibold text-foreground">
-                        {uploadedFileName || 'Click or drag reference PDF here'}
-                      </span>
-                      <span className="text-[11px] text-foreground-muted">
-                        Upload chapter book, study material, or question reference (PDF)
-                      </span>
-                    </label>
-                  </div>
+                    </div>
+                  ) : (
+                    /* Uploaded PDF State Card */
+                    <div className="space-y-3">
+                      <div className="p-3 rounded-xl border border-emerald-200 dark:border-emerald-800 bg-emerald-50/70 dark:bg-emerald-950/30 space-y-2.5">
+                        <div className="flex items-center justify-between gap-2">
+                          <div className="flex items-center gap-2 min-w-0">
+                            <FileText className="w-5 h-5 text-emerald-600 shrink-0" />
+                            <div className="min-w-0">
+                              <p className="text-xs font-bold text-emerald-950 dark:text-emerald-200 truncate">
+                                {uploadedFileName}
+                              </p>
+                              {uploadedFileSize && (
+                                <p className="text-[11px] text-emerald-700 dark:text-emerald-400">
+                                  {uploadedFileSize}
+                                </p>
+                              )}
+                            </div>
+                          </div>
+                          <div className="flex items-center gap-1.5 shrink-0">
+                            <Button
+                              variant="outline"
+                              size="sm"
+                              className="h-7 text-xs px-2"
+                              onClick={() => fileInputRef.current?.click()}
+                            >
+                              Change PDF
+                            </Button>
+                            <input
+                              type="file"
+                              ref={fileInputRef}
+                              accept="application/pdf"
+                              className="hidden"
+                              onChange={handleFileUpload}
+                            />
+                            <Button
+                              variant="ghost"
+                              size="icon"
+                              className="h-7 w-7 text-red-500 hover:text-red-700"
+                              title="Remove PDF"
+                              onClick={handleRemoveUploadedFile}
+                            >
+                              <X className="w-4 h-4" />
+                            </Button>
+                          </div>
+                        </div>
 
-                  {uploadedFileName && (
-                    <div className="flex items-center justify-between p-2 rounded-lg bg-emerald-50 dark:bg-emerald-950/40 border border-emerald-200 dark:border-emerald-800 text-xs text-emerald-800 dark:text-emerald-300">
-                      <div className="flex items-center gap-2 min-w-0">
-                        <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0" />
-                        <span className="font-semibold truncate">{uploadedFileName}</span>
+                        {/* Pipeline Status Checkmarks */}
+                        <div className="pt-1.5 border-t border-emerald-200/80 dark:border-emerald-800/80 space-y-1 text-xs text-emerald-800 dark:text-emerald-300">
+                          <div className="flex items-center gap-1.5">
+                            <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600" />
+                            <span>PDF uploaded securely</span>
+                          </div>
+                          <div className="flex items-center gap-1.5">
+                            <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600" />
+                            <span>Content extracted & processed</span>
+                          </div>
+                          {analysis && (
+                            <div className="flex items-center gap-1.5">
+                              <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600" />
+                              <span>AI curriculum analysis completed</span>
+                            </div>
+                          )}
+                        </div>
+
+                        {/* AI Detection Summary */}
+                        {analysis && (
+                          <div className="mt-2 p-2.5 rounded-lg bg-surface border border-emerald-100 dark:border-emerald-900 text-xs space-y-1 text-foreground">
+                            <p className="font-bold text-primary-700 dark:text-primary-300 flex items-center gap-1 text-[11px] uppercase tracking-wide">
+                              <Sparkles className="w-3 h-3" />
+                              Detected from Document
+                            </p>
+                            <div className="grid grid-cols-2 gap-x-2 gap-y-0.5 text-[11px] pt-1">
+                              <div>
+                                <span className="text-foreground-muted font-semibold">Class: </span>
+                                <span className="font-bold">{analysis.detectedClass || 'N/A'}</span>
+                              </div>
+                              <div>
+                                <span className="text-foreground-muted font-semibold">Subject: </span>
+                                <span className="font-bold">{analysis.detectedSubject || 'N/A'}</span>
+                              </div>
+                              {analysis.detectedChapter && (
+                                <div className="col-span-2 truncate">
+                                  <span className="text-foreground-muted font-semibold">Chapter: </span>
+                                  <span>{analysis.detectedChapter}</span>
+                                </div>
+                              )}
+                              {analysis.keyConcepts && analysis.keyConcepts.length > 0 && (
+                                <div className="col-span-2 truncate">
+                                  <span className="text-foreground-muted font-semibold">Topics: </span>
+                                  <span>{analysis.keyConcepts.slice(0, 3).join(', ')}</span>
+                                </div>
+                              )}
+                            </div>
+                          </div>
+                        )}
                       </div>
-                      <button
-                        type="button"
-                        onClick={() => {
-                          setUploadedFile(null);
-                          setUploadedFileName('');
-                          setUploadedDocId('');
-                          setExtractedContent('');
-                          setAnalysis(null);
-                        }}
-                        className="text-foreground-muted hover:text-red-500 p-1"
-                        title="Remove uploaded file"
-                      >
-                        <X className="w-3.5 h-3.5" />
-                      </button>
+                    </div>
+                  )}
+
+                  {/* Upload Error Display */}
+                  {uploadError && (
+                    <div className="flex items-center gap-2 text-xs text-red-700 bg-red-50 dark:bg-red-950/40 p-2.5 rounded-lg border border-red-200 dark:border-red-900">
+                      <AlertCircle className="w-4 h-4 shrink-0 text-red-600" />
+                      <span>{uploadError}</span>
                     </div>
                   )}
                 </div>
@@ -476,7 +639,7 @@ export function QuestionPaperGeneratorPage() {
               {isScanning && (
                 <div className="flex items-center gap-2 text-xs text-primary-700 bg-primary-50 dark:bg-primary-950/50 p-2.5 rounded-lg border border-primary-200 dark:border-primary-900">
                   <RefreshCw className="w-4 h-4 animate-spin shrink-0" />
-                  <span>Scanning study material and extracting concepts…</span>
+                  <span>Scanning study material and extracting syllabus concepts…</span>
                 </div>
               )}
 
@@ -484,14 +647,14 @@ export function QuestionPaperGeneratorPage() {
               {hasAnySource && !isScanning && (
                 <div className="pt-2 border-t border-border text-xs space-y-1.5">
                   <p className="font-semibold text-foreground flex items-center justify-between">
-                    <span>Active Exam Context Sources:</span>
+                    <span>Active Sources:</span>
                     <span className="text-[11px] text-primary-600 font-bold">
-                      {allDocIds.length + selectedWorksheetIds.length} active
+                      {allDocIds.length + selectedWorksheetIds.length} source(s) selected
                     </span>
                   </p>
                   <div className="flex flex-wrap gap-1.5">
                     {uploadedFileName && (
-                      <span className="inline-flex items-center gap-1 bg-primary-50 dark:bg-primary-950/50 border border-primary-200 dark:border-primary-900 text-primary-800 dark:text-primary-300 px-2 py-0.5 rounded text-[11px] font-medium">
+                      <span className="inline-flex items-center gap-1 bg-emerald-50 dark:bg-emerald-950/50 border border-emerald-200 dark:border-emerald-900 text-emerald-800 dark:text-emerald-300 px-2 py-0.5 rounded text-[11px] font-medium">
                         📄 {uploadedFileName}
                       </span>
                     )}
@@ -678,7 +841,7 @@ export function QuestionPaperGeneratorPage() {
                 <textarea
                   value={teacherPrompt}
                   onChange={(e) => setTeacherPrompt(e.target.value)}
-                  placeholder="e.g. Include 10 marks of MCQs in Section A, 10 marks of short problems in Section B, and one 5-mark long question in Section C..."
+                  placeholder="e.g. Create a 25-mark FA-1 paper. Include MCQs, fill in the blanks, short answer questions and one long answer. Focus mainly on photosynthesis and plant parts."
                   rows={2}
                   className="w-full p-2 text-xs rounded-md border border-input bg-surface focus:outline-none focus:ring-1 focus:ring-primary-500 leading-relaxed"
                 />
@@ -715,6 +878,8 @@ export function QuestionPaperGeneratorPage() {
               onQuestionPaperChange={setGeneratedPaper}
               onRegenerate={handleGenerate}
               isRegenerating={isGenerating}
+              sourceContext={extractedContent}
+              teacherPrompt={teacherPrompt}
             />
           ) : (
             /* Empty State */

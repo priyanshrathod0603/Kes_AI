@@ -111,6 +111,21 @@ export const generatorApi = {
     return extractData<QuestionPaperData>(res);
   },
 
+  regenerateSingleQuestion: async (params: {
+    questionIndex: number;
+    currentQuestion: any;
+    allQuestions?: any[];
+    className?: string;
+    subjectName?: string;
+    totalMarks?: number;
+    targetMarks?: number;
+    sourceContext?: string;
+    teacherPrompt?: string;
+  }): Promise<any> => {
+    const res = await api.post('/question-papers/regenerate-question', params);
+    return extractData<any>(res);
+  },
+
 
   downloadQuestionPaperPdf: async (questionPaperData: QuestionPaperData): Promise<Blob> => {
     const res = await api.post('/question-papers/export/pdf', { questionPaperData }, {

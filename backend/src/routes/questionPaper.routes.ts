@@ -118,7 +118,7 @@ router.post('/generate', async (req: Request, res: Response) => {
       }
       return sendError(
         res,
-        'No source material selected. Please upload a reference PDF or select at least one study material / worksheet.',
+        'Please upload a PDF, select a study material document, or select at least one worksheet.',
         400
       );
     }
@@ -143,6 +143,47 @@ router.post('/generate', async (req: Request, res: Response) => {
   } catch (error) {
     console.error('[Question Paper API] Generation failed:', error);
     return sendError(res, (error as Error).message || 'Failed to generate question paper');
+  }
+});
+
+/**
+ * POST /api/question-papers/regenerate-question
+ * Regenerates a single question in an existing question paper
+ */
+router.post('/regenerate-question', async (req: Request, res: Response) => {
+  try {
+    const {
+      questionIndex,
+      currentQuestion,
+      allQuestions = [],
+      className,
+      subjectName,
+      totalMarks,
+      targetMarks,
+      sourceContext,
+      teacherPrompt,
+    } = req.body;
+
+    if (!currentQuestion) {
+      return sendError(res, 'currentQuestion is required for regeneration', 400);
+    }
+
+    const regenerated = await questionPaperService.regenerateSingleQuestion({
+      questionIndex: Number(questionIndex) || 0,
+      currentQuestion,
+      allQuestions,
+      className: className || 'Class 1',
+      subjectName: subjectName || 'ENGLISH',
+      totalMarks: Number(totalMarks) || 25,
+      targetMarks: Number(targetMarks) || currentQuestion.marks || 5,
+      sourceContext,
+      teacherPrompt,
+    });
+
+    return sendSuccess(res, 'Question regenerated successfully', { data: regenerated });
+  } catch (error) {
+    console.error('[Question Paper API] Single question regeneration failed:', error);
+    return sendError(res, (error as Error).message || 'Failed to regenerate question');
   }
 });
 

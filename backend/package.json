@@ -7,6 +7,10 @@
     "dev": "tsx watch src/server.ts",
     "build": "tsc",
     "start": "node dist/server.js",
+    "test:nvidia": "tsx scripts/test-nvidia.ts",
+    "test:groq": "tsx scripts/test-groq.ts",
+    "test:ai": "tsx scripts/test-ai.ts",
+    "env": "scripts/with-env.sh",
     "prisma:generate": "prisma generate",
     "prisma:migrate": "prisma migrate dev",
     "prisma:studio": "prisma studio"

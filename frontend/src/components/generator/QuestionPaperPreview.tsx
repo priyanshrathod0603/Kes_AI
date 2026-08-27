@@ -12,6 +12,13 @@ import {
   RefreshCw,
   Printer,
   BookmarkPlus,
+  Trash2,
+  ArrowUp,
+  ArrowDown,
+  Plus,
+  Sparkles,
+  AlertCircle,
+  CheckCircle2,
 } from 'lucide-react';
 import { generatorApi } from '@/api/generatorApi';
 import { useToast } from '@/hooks/use-toast';
@@ -21,6 +28,8 @@ interface QuestionPaperPreviewProps {
   onQuestionPaperChange: (updated: QuestionPaperData) => void;
   onRegenerate: () => void;
   isRegenerating?: boolean;
+  sourceContext?: string;
+  teacherPrompt?: string;
 }
 
 export const QuestionPaperPreview: React.FC<QuestionPaperPreviewProps> = ({
@@ -28,12 +37,19 @@ export const QuestionPaperPreview: React.FC<QuestionPaperPreviewProps> = ({
   onQuestionPaperChange,
   onRegenerate,
   isRegenerating = false,
+  sourceContext,
+  teacherPrompt,
 }) => {
   const [isEditing, setIsEditing] = useState(false);
   const [isDownloadingPdf, setIsDownloadingPdf] = useState(false);
   const [isDownloadingDocx, setIsDownloadingDocx] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
+  const [regeneratingIndex, setRegeneratingIndex] = useState<number | null>(null);
   const { toast } = useToast();
+
+  // Dynamic Total Marks Calculation
+  const currentTotalMarks = questionPaper.questions.reduce((sum, q) => sum + (q.marks || 0), 0);
+  const isMarksBalanced = currentTotalMarks === questionPaper.totalMarks;
 
   const handleDownloadPdf = async () => {
     try {
@@ -42,7 +58,7 @@ export const QuestionPaperPreview: React.FC<QuestionPaperPreviewProps> = ({
       const url = window.URL.createObjectURL(blob);
       const a = document.createElement('a');
       a.href = url;
-      a.download = `${questionPaper.subjectName || 'Exam'}_${questionPaper.className || 'SRKG'}_${questionPaper.examName || 'Paper'}.pdf`.replace(/\s+/g, '_');
+      a.download = `${questionPaper.subjectName || 'Exam'}_${questionPaper.className || 'Class'}_${questionPaper.examName || 'Paper'}.pdf`.replace(/\s+/g, '_');
       document.body.appendChild(a);
       a.click();
       a.remove();
@@ -69,7 +85,7 @@ export const QuestionPaperPreview: React.FC<QuestionPaperPreviewProps> = ({
       const url = window.URL.createObjectURL(blob);
       const a = document.createElement('a');
       a.href = url;
-      a.download = `${questionPaper.subjectName || 'Exam'}_${questionPaper.className || 'SRKG'}_${questionPaper.examName || 'Paper'}.docx`.replace(/\s+/g, '_');
+      a.download = `${questionPaper.subjectName || 'Exam'}_${questionPaper.className || 'Class'}_${questionPaper.examName || 'Paper'}.docx`.replace(/\s+/g, '_');
       document.body.appendChild(a);
       a.click();
       a.remove();
@@ -111,14 +127,113 @@ export const QuestionPaperPreview: React.FC<QuestionPaperPreviewProps> = ({
   const updateQuestion = (index: number, updatedQ: WorksheetQuestionItem) => {
     const nextQuestions = [...questionPaper.questions];
     nextQuestions[index] = updatedQ;
-    onQuestionPaperChange({ ...questionPaper, questions: nextQuestions });
+    const newTotal = nextQuestions.reduce((acc, q) => acc + (q.marks || 0), 0);
+    onQuestionPaperChange({
+      ...questionPaper,
+      questions: nextQuestions,
+      totalMarks: newTotal,
+    });
+  };
+
+  const handleDeleteQuestion = (index: number) => {
+    if (questionPaper.questions.length <= 1) {
+      toast({
+        title: 'Cannot Delete',
+        description: 'An examination paper must have at least one question.',
+        variant: 'destructive',
+      });
+      return;
+    }
+    const filtered = questionPaper.questions
+      .filter((_, idx) => idx !== index)
+      .map((q, idx) => ({ ...q, number: idx + 1 }));
+    const newTotal = filtered.reduce((acc, q) => acc + (q.marks || 0), 0);
+    onQuestionPaperChange({
+      ...questionPaper,
+      questions: filtered,
+      totalMarks: newTotal,
+    });
+    toast({
+      title: 'Question Deleted',
+      description: `Removed question. Total marks updated to ${newTotal}.`,
+    });
+  };
+
+  const handleMoveQuestion = (index: number, direction: 'up' | 'down') => {
+    const targetIdx = direction === 'up' ? index - 1 : index + 1;
+    if (targetIdx < 0 || targetIdx >= questionPaper.questions.length) return;
+
+    const next = [...questionPaper.questions];
+    const [moved] = next.splice(index, 1);
+    next.splice(targetIdx, 0, moved);
+
+    const renumbered = next.map((q, idx) => ({ ...q, number: idx + 1 }));
+    onQuestionPaperChange({ ...questionPaper, questions: renumbered });
+  };
+
+  const handleAddQuestion = () => {
+    const newQNumber = questionPaper.questions.length + 1;
+    const newQuestion: WorksheetQuestionItem = {
+      number: newQNumber,
+      section: questionPaper.questions[questionPaper.questions.length - 1]?.section || 'SECTION A',
+      type: 'short_answer',
+      instruction: 'Answer the following question in 2-3 sentences:',
+      marks: 5,
+      blankLinesCount: 2,
+    };
+    const nextQuestions = [...questionPaper.questions, newQuestion];
+    const newTotal = nextQuestions.reduce((acc, q) => acc + (q.marks || 0), 0);
+    onQuestionPaperChange({
+      ...questionPaper,
+      questions: nextQuestions,
+      totalMarks: newTotal,
+    });
+    toast({
+      title: 'Question Added',
+      description: `Added Q.${newQNumber}. Total marks updated to ${newTotal}.`,
+    });
+  };
+
+  const handleRegenerateSingleQuestion = async (index: number) => {
+    const currentQ = questionPaper.questions[index];
+    setRegeneratingIndex(index);
+    try {
+      const regenerated = await generatorApi.regenerateSingleQuestion({
+        questionIndex: index,
+        currentQuestion: currentQ,
+        allQuestions: questionPaper.questions,
+        className: questionPaper.className,
+        subjectName: questionPaper.subjectName,
+        totalMarks: questionPaper.totalMarks,
+        targetMarks: currentQ.marks || 5,
+        sourceContext,
+        teacherPrompt,
+      });
+
+      if (regenerated) {
+        updateQuestion(index, regenerated);
+        toast({
+          title: 'Question Regenerated',
+          description: `Successfully regenerated Q.${currentQ.number} with fresh content!`,
+        });
+      }
+    } catch (err: any) {
+      console.error('[Single Regenerate Error]', err);
+      toast({
+        title: 'Regeneration Failed',
+        description: err.message || 'Could not regenerate question.',
+        variant: 'destructive',
+      });
+    } finally {
+      setRegeneratingIndex(null);
+    }
   };
 
   return (
     <div className="space-y-6">
       {/* Top Action Controls Toolbar */}
       <div className="flex flex-wrap items-center justify-between gap-3 bg-surface p-4 rounded-xl border border-border shadow-xs">
-        <div className="flex items-center gap-2">
+        <div className="flex flex-wrap items-center gap-2">
           <Button
             variant={isEditing ? 'default' : 'outline'}
             size="sm"
@@ -129,15 +244,27 @@ export const QuestionPaperPreview: React.FC<QuestionPaperPreviewProps> = ({
             {isEditing ? 'Finish Editing' : 'Edit Exam Paper'}
           </Button>
 
+          {isEditing && (
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={handleAddQuestion}
+              className="flex items-center gap-1.5 border-dashed border-primary-400 text-primary-700 dark:text-primary-300"
+            >
+              <Plus className="w-4 h-4" />
+              Add Question
+            </Button>
+          )}
+
           <Button
             variant="outline"
             size="sm"
             onClick={onRegenerate}
-            disabled={isRegenerating}
+            disabled={isRegenerating || regeneratingIndex !== null}
             className="flex items-center gap-1.5"
           >
             <RefreshCw className={`w-4 h-4 ${isRegenerating ? 'animate-spin' : ''}`} />
-            Regenerate
+            Regenerate All
           </Button>
 
           <Button
@@ -152,12 +279,30 @@ export const QuestionPaperPreview: React.FC<QuestionPaperPreviewProps> = ({
           </Button>
         </div>
 
-        <div className="flex items-center gap-2">
+        {/* Live Marks Counter Badge */}
+        <div className="flex items-center gap-2 text-xs font-semibold">
+          <div
+            className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg border ${
+              isMarksBalanced
+                ? 'bg-emerald-50 dark:bg-emerald-950/50 border-emerald-300 text-emerald-800 dark:text-emerald-300'
+                : 'bg-amber-50 dark:bg-amber-950/50 border-amber-300 text-amber-800 dark:text-amber-300'
+            }`}
+          >
+            {isMarksBalanced ? (
+              <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600 shrink-0" />
+            ) : (
+              <AlertCircle className="w-3.5 h-3.5 text-amber-600 shrink-0" />
+            )}
+            <span>
+              Total: {currentTotalMarks} / {questionPaper.totalMarks} Marks
+            </span>
+          </div>
+
           <Button
             variant="outline"
             size="sm"
             onClick={() => window.print()}
-            className="flex items-center gap-1.5 hidden sm:inline-flex"
+            className="hidden sm:inline-flex items-center gap-1.5"
           >
             <Printer className="w-4 h-4" />
             Print
@@ -186,7 +331,6 @@ export const QuestionPaperPreview: React.FC<QuestionPaperPreviewProps> = ({
           </Button>
         </div>
       </div>
-
 
       {/* Editable Header Meta (when in edit mode) */}
       {isEditing && (
@@ -222,15 +366,11 @@ export const QuestionPaperPreview: React.FC<QuestionPaperPreviewProps> = ({
             />
           </div>
           <div>
-            <label className="font-semibold block mb-1">Total Marks</label>
+            <label className="font-semibold block mb-1">Duration</label>
             <Input
-              type="number"
-              value={questionPaper.totalMarks}
+              value={questionPaper.duration}
               onChange={(e) =>
-                onQuestionPaperChange({
-                  ...questionPaper,
-                  totalMarks: Number(e.target.value) || 25,
-                })
+                onQuestionPaperChange({ ...questionPaper, duration: e.target.value })
               }
               className="h-8 text-xs"
             />
@@ -259,7 +399,7 @@ export const QuestionPaperPreview: React.FC<QuestionPaperPreviewProps> = ({
         {/* General Instructions */}
         {questionPaper.instructions && questionPaper.instructions.length > 0 && (
           <div className="text-xs text-slate-700 py-1 border-b border-dotted border-slate-300 mb-4">
-            <span className="font-bold">Instructions:</span>
+            <span className="font-bold">General Instructions:</span>
             <ul className="list-disc pl-5 mt-0.5 space-y-0.5">
               {questionPaper.instructions.map((ins, i) => (
                 <li key={i}>{ins}</li>
@@ -271,10 +411,15 @@ export const QuestionPaperPreview: React.FC<QuestionPaperPreviewProps> = ({
         {/* Questions Section */}
         <div className="space-y-6 pt-2">
           {questionPaper.questions.map((q, qIndex) => (
-            <div key={qIndex} className="space-y-2.5 pb-2">
+            <div
+              key={qIndex}
+              className={`space-y-2.5 pb-3 transition-all ${
+                isEditing ? 'p-3 rounded-lg border border-dashed border-primary-200 bg-slate-50/40' : ''
+              }`}
+            >
               {/* Section Header if present */}
               {q.section && (qIndex === 0 || questionPaper.questions[qIndex - 1].section !== q.section) && (
-                <div className="text-center my-3 border-y border-slate-300 py-1.5 bg-slate-50/60 font-bold text-xs sm:text-sm tracking-wider uppercase text-slate-800">
+                <div className="text-center my-3 border-y border-slate-300 py-1.5 bg-slate-50/80 font-bold text-xs sm:text-sm tracking-wider uppercase text-slate-800">
                   {isEditing ? (
                     <Input
                       value={q.section}
@@ -282,11 +427,67 @@ export const QuestionPaperPreview: React.FC<QuestionPaperPreviewProps> = ({
                         updateQuestion(qIndex, { ...q, section: e.target.value })
                       }
                       className="h-7 text-xs font-bold text-center"
-                      placeholder="e.g. SECTION A: OBJECTIVE QUESTIONS (10 MARKS)"
+                      placeholder="e.g. SECTION A: OBJECTIVE TYPE"
                     />
                   ) : (
                     <span>{q.section}</span>
                   )}
+                </div>
+              )}
+
+              {/* Question Action Bar in Edit Mode */}
+              {isEditing && (
+                <div className="flex items-center justify-between gap-2 pb-1 border-b border-slate-200 text-xs">
+                  <div className="flex items-center gap-1 text-slate-500 font-semibold">
+                    <span>Question {q.number}</span>
+                    <span className="text-[10px] bg-slate-200 px-1.5 py-0.5 rounded font-mono uppercase">
+                      {q.type}
+                    </span>
+                  </div>
+
+                  <div className="flex items-center gap-1">
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      className="h-6 w-6"
+                      title="Move Up"
+                      disabled={qIndex === 0}
+                      onClick={() => handleMoveQuestion(qIndex, 'up')}
+                    >
+                      <ArrowUp className="w-3.5 h-3.5" />
+                    </Button>
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      className="h-6 w-6"
+                      title="Move Down"
+                      disabled={qIndex === questionPaper.questions.length - 1}
+                      onClick={() => handleMoveQuestion(qIndex, 'down')}
+                    >
+                      <ArrowDown className="w-3.5 h-3.5" />
+                    </Button>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      className="h-6 px-2 text-[11px] flex items-center gap-1 text-primary-700 dark:text-primary-300"
+                      disabled={regeneratingIndex === qIndex}
+                      onClick={() => handleRegenerateSingleQuestion(qIndex)}
+                    >
+                      <Sparkles
+                        className={`w-3 h-3 ${regeneratingIndex === qIndex ? 'animate-spin' : ''}`}
+                      />
+                      Regenerate
+                    </Button>
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      className="h-6 w-6 text-red-500 hover:text-red-700"
+                      title="Delete Question"
+                      onClick={() => handleDeleteQuestion(qIndex)}
+                    >
+                      <Trash2 className="w-3.5 h-3.5" />
+                    </Button>
+                  </div>
                 </div>
               )}
 
@@ -312,16 +513,20 @@ export const QuestionPaperPreview: React.FC<QuestionPaperPreviewProps> = ({
                 </div>
                 <div className="text-xs sm:text-sm font-extrabold shrink-0 text-slate-900 border border-slate-800 rounded px-2 py-0.5">
                   {isEditing ? (
-                    <Input
-                      type="number"
-                      value={q.marks || 5}
-                      onChange={(e) =>
-                        updateQuestion(qIndex, { ...q, marks: Number(e.target.value) || 0 })
-                      }
-                      className="h-6 w-14 text-xs font-bold"
-                    />
+                    <div className="flex items-center gap-1">
+                      <span className="text-[11px] font-normal text-slate-500">Marks:</span>
+                      <Input
+                        type="number"
+                        value={q.marks || 5}
+                        min={1}
+                        onChange={(e) =>
+                          updateQuestion(qIndex, { ...q, marks: Number(e.target.value) || 1 })
+                        }
+                        className="h-6 w-14 text-xs font-bold"
+                      />
+                    </div>
                   ) : (
-                    <span>[{q.marks || 5}]</span>
+                    <span>[{q.marks || 5} Marks]</span>
                   )}
                 </div>
               </div>
@@ -344,14 +549,25 @@ export const QuestionPaperPreview: React.FC<QuestionPaperPreviewProps> = ({
                 </div>
               )}
 
-              {/* Visual Clue if present */}
+              {/* Visual Context */}
               {q.visualContext && (
                 <div className="pl-6 text-xs text-slate-600 italic bg-slate-50 p-2 rounded border border-slate-200">
-                  <span>Context: {q.visualContext}</span>
+                  {isEditing ? (
+                    <Input
+                      value={q.visualContext}
+                      onChange={(e) =>
+                        updateQuestion(qIndex, { ...q, visualContext: e.target.value })
+                      }
+                      placeholder="Visual clue or contextual hint..."
+                      className="text-xs"
+                    />
+                  ) : (
+                    <span>Context: {q.visualContext}</span>
+                  )}
                 </div>
               )}
 
-              {/* Items / Missing letters */}
+              {/* Items / Missing Letters */}
               {q.items && q.items.length > 0 && (
                 <div className="pl-6 space-y-2">
                   {q.items.map((item, itemIdx) => (
@@ -396,21 +612,38 @@ export const QuestionPaperPreview: React.FC<QuestionPaperPreviewProps> = ({
                             />
                             <Input
                               value={sq.answerBlank || ''}
-                              placeholder="Blank template (e.g. M ___)"
+                              placeholder="Blank template"
                               onChange={(e) => {
                                 const newSq = [...(q.subQuestions || [])];
                                 newSq[sqIdx] = { ...sq, answerBlank: e.target.value };
                                 updateQuestion(qIndex, { ...q, subQuestions: newSq });
                               }}
-                              className="h-7 text-xs w-36"
+                              className="h-7 text-xs w-28"
+                            />
+                            <Input
+                              type="number"
+                              value={sq.marks || 1}
+                              min={1}
+                              onChange={(e) => {
+                                const newSq = [...(q.subQuestions || [])];
+                                newSq[sqIdx] = { ...sq, marks: Number(e.target.value) || 1 };
+                                updateQuestion(qIndex, { ...q, subQuestions: newSq });
+                              }}
+                              className="h-7 text-xs w-16"
+                              placeholder="M"
                             />
                           </div>
                         ) : (
                           <div className="flex-1 flex items-center justify-between border-b border-dotted border-slate-400 pb-1">
                             <span>{sq.prompt}</span>
-                            <span className="font-mono font-bold tracking-wider mr-4">
-                              {sq.answerBlank || '________'}
-                            </span>
+                            <div className="flex items-center gap-3">
+                              <span className="font-mono font-bold tracking-wider">
+                                {sq.answerBlank || '________'}
+                              </span>
+                              {sq.marks && (
+                                <span className="text-xs text-slate-500 font-bold">[{sq.marks}M]</span>
+                              )}
+                            </div>
                           </div>
                         )}
                       </div>

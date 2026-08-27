@@ -70,7 +70,7 @@ export class WorksheetService {
   /**
    * Helper to categorize class/grade level for pedagogical tuning
    */
-  private categorizeClassLevel(className: string): 'pre_primary' | 'primary' | 'middle' | 'secondary' {
+  categorizeClassLevel(className: string): 'pre_primary' | 'primary' | 'middle' | 'secondary' {
     const norm = (className || '').toLowerCase().trim();
     if (
       norm.includes('nursery') ||
@@ -84,31 +84,55 @@ export class WorksheetService {
     ) {
       return 'pre_primary';
     }
+    // Check Secondary (9 to 12)
     if (
-      norm.includes('1') ||
-      norm.includes('2') ||
-      norm.includes('3') ||
-      norm.includes('4') ||
-      norm.includes('5') ||
-      norm.includes('i') ||
-      norm.includes('ii') ||
-      norm.includes('iii') ||
-      norm.includes('iv') ||
-      norm.includes('v')
+      /\b(9|10|11|12|ix|x|xi|xii)\b/.test(norm) ||
+      norm.includes('secondary') ||
+      norm.includes('higher') ||
+      norm.includes('class 9') ||
+      norm.includes('class 10') ||
+      norm.includes('class 11') ||
+      norm.includes('class 12') ||
+      norm.includes('std 9') ||
+      norm.includes('std 10') ||
+      norm.includes('std 11') ||
+      norm.includes('std 12') ||
+      norm.includes('grade 9') ||
+      norm.includes('grade 10') ||
+      norm.includes('grade 11') ||
+      norm.includes('grade 12')
     ) {
-      return 'primary';
+      return 'secondary';
     }
+    // Check Middle (6 to 8)
     if (
-      norm.includes('6') ||
-      norm.includes('7') ||
-      norm.includes('8') ||
-      norm.includes('vi') ||
-      norm.includes('vii') ||
-      norm.includes('viii')
+      /\b(6|7|8|vi|vii|viii)\b/.test(norm) ||
+      norm.includes('middle') ||
+      norm.includes('class 6') ||
+      norm.includes('class 7') ||
+      norm.includes('class 8') ||
+      norm.includes('std 6') ||
+      norm.includes('std 7') ||
+      norm.includes('std 8') ||
+      norm.includes('grade 6') ||
+      norm.includes('grade 7') ||
+      norm.includes('grade 8')
     ) {
       return 'middle';
     }
-    return 'secondary';
+    // Primary (1 to 5)
+    if (
+      /\b(1|2|3|4|5|i|ii|iii|iv|v)\b/.test(norm) ||
+      norm.includes('primary') ||
+      norm.includes('class 1') ||
+      norm.includes('class 2') ||
+      norm.includes('class 3') ||
+      norm.includes('class 4') ||
+      norm.includes('class 5')
+    ) {
+      return 'primary';
+    }
+    return 'primary';
   }
 
   /**

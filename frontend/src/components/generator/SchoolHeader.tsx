@@ -4,6 +4,7 @@ import { cn } from '@/lib/utils';
 interface SchoolHeaderProps {
   schoolName?: string;
   schoolSubHeader?: string;
+  logoUrl?: string;
   documentTitle?: string;
   academicYear?: string;
   studentName?: string;
@@ -18,12 +19,12 @@ interface SchoolHeaderProps {
 export const SchoolHeader: React.FC<SchoolHeaderProps> = ({
   schoolName = 'KRISHNA ENGLISH SCHOOL',
   schoolSubHeader = 'Pre-Primary-Primary-Secondary School',
+  logoUrl,
   documentTitle = 'Worksheet FA 1',
   academicYear = '2026-27',
   subjectName = 'ENGLISH',
   className = 'Class 1',
   timeAllowed,
-
   totalMarks,
   isQuestionPaper = false,
   classNameCustom,
@@ -32,54 +33,22 @@ export const SchoolHeader: React.FC<SchoolHeaderProps> = ({
     <div className={cn('text-center font-sans select-none text-slate-900', classNameCustom)}>
       {/* School Emblem / Logo & Names */}
       <div className="flex flex-col items-center justify-center pb-2">
-        {/* Krishna English School Emblem SVG */}
-        <div className="mb-1 flex items-center justify-center">
-          <svg
-            className="w-12 h-12 text-slate-800"
-            viewBox="0 0 100 100"
-            fill="none"
-            xmlns="http://www.w3.org/2000/svg"
-          >
-            {/* Outer Laurel / Shield border */}
-            <circle cx="50" cy="50" r="46" stroke="currentColor" strokeWidth="2.5" strokeDasharray="3 2" />
-            <circle cx="50" cy="50" r="41" stroke="currentColor" strokeWidth="1.5" />
-            
-            {/* Open Book in center */}
-            <path
-              d="M50 64V36C44 32 30 32 24 35V63C30 60 44 60 50 64ZM50 64V36C56 32 70 32 76 35V63C70 60 56 60 50 64Z"
-              fill="currentColor"
-              fillOpacity="0.1"
-              stroke="currentColor"
-              strokeWidth="2"
-              strokeLinejoin="round"
-            />
-            {/* Quill / Flame on top */}
-            <path
-              d="M50 22C47 27 47 31 50 34C53 31 53 27 50 22Z"
-              fill="currentColor"
-            />
-            {/* Rays / Stars */}
-            <circle cx="34" cy="27" r="1.5" fill="currentColor" />
-            <circle cx="66" cy="27" r="1.5" fill="currentColor" />
-            <circle cx="50" cy="74" r="2" fill="currentColor" />
-            {/* Bottom ribbon banner curve */}
-            <path
-              d="M26 77C38 73 62 73 74 77"
-              stroke="currentColor"
-              strokeWidth="1.5"
-              strokeLinecap="round"
-            />
-          </svg>
-        </div>
+        {logoUrl && (
+          <div className="mb-2 flex items-center justify-center">
+            <img src={logoUrl} alt={schoolName} className="h-12 w-auto object-contain" />
+          </div>
+        )}
 
         <h1 className="text-xl sm:text-2xl font-extrabold tracking-wide uppercase font-serif text-slate-950">
           {schoolName}
         </h1>
-        <p className="text-xs sm:text-sm font-medium tracking-wide text-slate-700 mt-0.5">
-          {schoolSubHeader}
-        </p>
+        {schoolSubHeader && (
+          <p className="text-xs sm:text-sm font-medium tracking-wide text-slate-700 mt-0.5">
+            {schoolSubHeader}
+          </p>
+        )}
         <p className="text-sm sm:text-base font-bold text-slate-900 mt-1 uppercase tracking-tight">
-          {documentTitle} {academicYear ? `Year ${academicYear}` : ''}
+          {documentTitle} {academicYear ? `· Academic Year ${academicYear}` : ''}
         </p>
       </div>
 
