@@ -108,13 +108,27 @@ export interface AIChatResponse {
   }
 }
 
+export interface QuizQuestion {
+  id?: string
+  quizId?: string
+  questionText: string
+  optionA: string
+  optionB: string
+  optionC: string
+  optionD: string
+  correctOption: 'A' | 'B' | 'C' | 'D'
+  explanation?: string | null
+}
+
 export interface Quiz {
   id: string
   title: string
   description: string | null
-  subjectId: string
+  subjectId: string | null
+  chapterId?: string | null
   createdAt: string
   updatedAt: string
+  questions?: QuizQuestion[]
 }
 
 export interface ApiError {

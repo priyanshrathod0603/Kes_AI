@@ -44,12 +44,56 @@ export function useCreateClass() {
   })
 }
 
+export function useUpdateClass() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: ({ id, name }: { id: string; name: string }) => academicApi.updateClass(id, name),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['classes'] }),
+  })
+}
+
+export function useDeleteClass() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: (id: string) => academicApi.deleteClass(id),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['classes'] })
+      qc.invalidateQueries({ queryKey: ['subjects'] })
+      qc.invalidateQueries({ queryKey: ['chapters'] })
+      qc.invalidateQueries({ queryKey: ['topics'] })
+      qc.invalidateQueries({ queryKey: ['documents'] })
+    },
+  })
+}
+
 export function useCreateSubject() {
   const qc = useQueryClient()
   return useMutation({
     mutationFn: ({ name, classId }: { name: string; classId: string }) =>
       academicApi.createSubject(name, classId),
     onSuccess: () => qc.invalidateQueries({ queryKey: ['subjects'] }),
+  })
+}
+
+export function useUpdateSubject() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: ({ id, name, classId }: { id: string; name: string; classId?: string }) =>
+      academicApi.updateSubject(id, name, classId),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['subjects'] }),
+  })
+}
+
+export function useDeleteSubject() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: (id: string) => academicApi.deleteSubject(id),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['subjects'] })
+      qc.invalidateQueries({ queryKey: ['chapters'] })
+      qc.invalidateQueries({ queryKey: ['topics'] })
+      qc.invalidateQueries({ queryKey: ['documents'] })
+    },
   })
 }
 
@@ -62,11 +106,61 @@ export function useCreateChapter() {
   })
 }
 
+export function useUpdateChapter() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: ({
+      id,
+      name,
+      description,
+      subjectId,
+    }: {
+      id: string
+      name: string
+      description?: string
+      subjectId?: string
+    }) => academicApi.updateChapter(id, name, description, subjectId),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['chapters'] }),
+  })
+}
+
+export function useDeleteChapter() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: (id: string) => academicApi.deleteChapter(id),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['chapters'] })
+      qc.invalidateQueries({ queryKey: ['topics'] })
+      qc.invalidateQueries({ queryKey: ['documents'] })
+    },
+  })
+}
+
 export function useCreateTopic() {
   const qc = useQueryClient()
   return useMutation({
     mutationFn: ({ name, chapterId }: { name: string; chapterId: string }) =>
       academicApi.createTopic(name, chapterId),
     onSuccess: () => qc.invalidateQueries({ queryKey: ['topics'] }),
+  })
+}
+
+export function useUpdateTopic() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: ({ id, name, chapterId }: { id: string; name: string; chapterId?: string }) =>
+      academicApi.updateTopic(id, name, chapterId),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['topics'] }),
+  })
+}
+
+export function useDeleteTopic() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: (id: string) => academicApi.deleteTopic(id),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['topics'] })
+      qc.invalidateQueries({ queryKey: ['documents'] })
+    },
   })
 }

@@ -2,87 +2,41 @@
 
 import { useState } from 'react'
 import { Link, useParams } from 'react-router-dom'
-import { FileText, ExternalLink, Download, Plus, Trash2 } from 'lucide-react'
+import { FileText, Bot, Download, ArrowRight, Eye, Edit2, Trash2 } from 'lucide-react'
 import { motion } from 'framer-motion'
 import { Card } from '@/components/ui/card'
-import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
+import { Button } from '@/components/ui/button'
 import { PageHeader, EmptyState, ErrorState, LoadingState } from '@/components/feedback/States'
-import { DeleteConfirmDialog } from '@/components/management'
-import { useSubjects, useChapters, useTopics, useDocuments, useDeleteDocument } from '@/hooks'
-import { documentApi, type Document } from '@/api'
-
-function typeLabel(t: string): string {
-  switch (t) {
-    case 'CHAPTER_MATERIAL':
-      return 'Chapter Material'
-    case 'WORKSHEET':
-      return 'Worksheet'
-    case 'QUESTION_PAPER':
-      return 'Question Paper'
-    case 'ANSWER_KEY':
-      return 'Answer Key'
-    case 'STUDY_MATERIAL':
-    default:
-      return 'Study Material'
-  }
-}
-
-function statusBadge(status?: string) {
-  switch (status) {
-    case 'COMPLETED':
-      return <Badge variant="success" className="text-xs">Ready</Badge>
-    case 'PROCESSING':
-      return <Badge variant="secondary" className="text-xs">Processing</Badge>
-    case 'FAILED':
-      return <Badge variant="destructive" className="text-xs">Failed</Badge>
-    case 'NO_TEXT':
-      return <Badge variant="warning" className="text-xs">No text</Badge>
-    case 'PENDING':
-      return <Badge variant="outline" className="text-xs">Pending</Badge>
-    default:
-      return null
-  }
-}
-
-function formatFileSize(bytes: number): string {
-  if (!bytes || isNaN(bytes)) return '0 B'
-  if (bytes < 1024) return `${bytes} B`
-  if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`
-  return `${(bytes / (1024 * 1024)).toFixed(1)} MB`
-}
+import { EditTopicDialog, DeleteConfirmDialog, EditDocumentDialog } from '@/components/management'
+import { useTopics, useChapters, useDocuments, useDownloadDocument, useDeleteDocument, useDeleteTopic } from '@/hooks'
+import { formatFileSize, formatRelativeTime } from '@/lib/utils'
+import type { Topic, Document } from '@/types'
 
 export function TopicDetailPage() {
-  const { subjectId, chapterId } = useParams<{ subjectId: string; chapterId: string }>()
-  const [deleteTarget, setDeleteTarget] = useState<Document | null>(null)
+  const { id } = useParams<{ id: string }>()
+  const [editTopicOpen, setEditTopicOpen] = useState(false)
+  const [deleteTopicOpen, setDeleteTopicOpen] = useState(false)
+  const [editDocTarget, setEditDocTarget] = useState<Document | null>(null)
+  const [deleteDocTarget, setDeleteDocTarget] = useState<Document | null>(null)
 
-  const { data: subjects = [] } = useSubjects()
-  const { data: chapters = [], isLoading: chaptersLoading } = useChapters(
-    subjectId ? { subjectId } : undefined,
-    { enabled: !!subjectId }
-  )
-  const { data: topics = [], isLoading: topicsLoading } = useTopics(
-    chapterId ? { chapterId } : undefined,
-    { enabled: !!chapterId }
-  )
-  const { data: docs, isLoading: docsLoading, error: docsError } = useDocuments(
-    chapterId ? { chapterId, limit: 50 } : undefined
-  )
-  const deleteMutation = useDeleteDocument()
+  const { data: topics = [], isLoading: topicsLoading } = useTopics()
+  const { data: chapters = [], isLoading: chaptersLoading } = useChapters()
+  const { data: docsResponse, isLoading: docsLoading } = useDocuments({ topicId: id })
 
-  const subject = subjects.find((s) => s.id === subjectId)
-  const chapter = chapters.find((c) => c.id === chapterId)
+  const downloadMutation = useDownloadDocument()
+  const deleteDocMutation = useDeleteDocument()
+  const deleteTopicMutation = useDeleteTopic()
 
-  if (chaptersLoading || topicsLoading || docsLoading) {
-    return <LoadingState label="Loading topic resources…" />
-  }
+  const topic = topics.find((t) => t.id === id)
+  const chapter = topic ? chapters.find((c) => c.id === topic.chapterId) : null
+  const documents = docsResponse?.data ?? []
 
-  if (docsError) {
-    const msg = (docsError as { message?: string }).message
-    return <ErrorState description={msg} />
-  }
+  const isLoading = topicsLoading || chaptersLoading || docsLoading
 
-  if (!chapter || !subject) {
+  if (isLoading) return <LoadingState label="Loading topic…" />
+
+  if (!topic) {
     return (
       <EmptyState
         title="Topic not found"
@@ -96,116 +50,206 @@ export function TopicDetailPage() {
     )
   }
 
-  const handleDelete = async () => {
-    if (!deleteTarget) return
+  const handleDownload = async (doc: Document) => {
     try {
-      await deleteMutation.mutateAsync(deleteTarget.id)
-      setDeleteTarget(null)
+      const blob = await downloadMutation.mutateAsync(doc.id)
+      const url = window.URL.createObjectURL(blob)
+      const a = window.document.createElement('a')
+      a.href = url
+      a.download = doc.fileName || `${doc.title}.pdf`
+      window.document.body.appendChild(a)
+      a.click()
+      window.document.body.removeChild(a)
+      window.URL.revokeObjectURL(url)
+    } catch {
+      alert('Failed to download document.')
+    }
+  }
+
+  const handleDeleteDoc = async () => {
+    if (!deleteDocTarget) return
+    try {
+      await deleteDocMutation.mutateAsync(deleteDocTarget.id)
+      setDeleteDocTarget(null)
     } catch (err: unknown) {
       alert(`Failed to delete document: ${(err as Error).message}`)
+    }
+  }
+
+  const handleDeleteTopic = async () => {
+    try {
+      await deleteTopicMutation.mutateAsync(topic.id)
+      window.location.href = chapter ? `/chapters/${chapter.id}` : '/subjects'
+    } catch (err: unknown) {
+      alert(`Failed to delete topic: ${(err as Error).message}`)
     }
   }
 
   return (
     <div className="space-y-6">
       <PageHeader
-        title={chapter.name}
-        description={`Study materials and resources for ${chapter.name}`}
-        back={{ to: `/subjects/${subject.id}/chapters/${chapter.id}`, label: `Back to ${chapter.name}` }}
+        title={topic.name}
+        description={chapter ? `Part of ${chapter.name}` : 'Topic overview and materials'}
+        back={
+          chapter
+            ? { to: `/chapters/${chapter.id}`, label: `Back to ${chapter.name}` }
+            : { to: '/subjects', label: 'Back to Subjects' }
+        }
         actions={
-          <Button asChild>
-            <Link to="/study-material">
-              <Plus className="h-4 w-4 mr-1.5" /> Upload Study Material
-            </Link>
-          </Button>
+          <div className="flex items-center gap-2">
+            <Button variant="outline" size="sm" onClick={() => setEditTopicOpen(true)}>
+              <Edit2 className="h-3.5 w-3.5 mr-1" /> Edit Topic
+            </Button>
+            <Button variant="outline" size="sm" onClick={() => setDeleteTopicOpen(true)} className="text-error-600 hover:text-error-700 hover:bg-error-50">
+              <Trash2 className="h-3.5 w-3.5 mr-1" /> Delete
+            </Button>
+            <Button asChild>
+              <Link to="/ai-tutor">
+                <Bot className="h-4 w-4 mr-1.5" /> Launch AI Tutor
+              </Link>
+            </Button>
+          </div>
         }
       />
 
-      {topics.length > 0 && (
-        <div className="flex flex-wrap items-center gap-1.5 p-3 rounded-xl border border-border bg-surface">
-          <span className="text-xs font-semibold text-foreground-muted mr-1">Topics:</span>
-          {topics.map((t) => (
-            <Badge key={t.id} variant="secondary" className="text-xs">
-              {t.name}
-            </Badge>
-          ))}
+      {/* Quick Launch Banner */}
+      <Card className="p-5 bg-gradient-to-r from-primary-50 to-primary-100/40 border-primary-200">
+        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+          <div>
+            <h3 className="font-semibold text-primary-950 text-base">
+              Learn "{topic.name}" with KES AI
+            </h3>
+            <p className="text-xs text-primary-800 mt-1 max-w-xl">
+              Start an interactive learning conversation tailored to this topic. Ask questions, request examples, or generate custom quizzes.
+            </p>
+          </div>
+          <Button asChild className="shrink-0">
+            <Link to="/ai-tutor">
+              Start Session <ArrowRight className="h-4 w-4 ml-1.5" />
+            </Link>
+          </Button>
         </div>
-      )}
+      </Card>
 
-      {docs?.data && docs.data.length > 0 ? (
-        <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-          {docs.data.map((doc) => (
-            <motion.div
-              key={doc.id}
-              initial={{ opacity: 0, y: 6 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ duration: 0.15 }}
-            >
-              <Card className="h-full flex flex-col p-5 hover:shadow-md transition-shadow">
-                <div className="flex items-start justify-between mb-3">
-                  <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-primary-50 text-primary-600 dark:bg-primary-950/40 shrink-0">
-                    <FileText className="h-5 w-5" />
+      {/* Study Materials for this topic */}
+      <div className="space-y-3">
+        <div className="flex items-center justify-between">
+          <h3 className="text-base font-semibold text-foreground">
+            Study Materials ({documents.length})
+          </h3>
+          <Button asChild variant="outline" size="sm">
+            <Link to="/study-material">
+              Upload PDF <ArrowRight className="h-3.5 w-3.5 ml-1" />
+            </Link>
+          </Button>
+        </div>
+
+        {documents.length === 0 ? (
+          <EmptyState
+            title="No materials attached to this topic"
+            description="Upload PDFs in the Study Material section and tag them to this topic."
+            action={
+              <Button asChild variant="outline" size="sm">
+                <Link to="/study-material">Go to Study Material</Link>
+              </Button>
+            }
+          />
+        ) : (
+          <div className="grid gap-3 sm:grid-cols-2">
+            {documents.map((doc) => (
+              <motion.div
+                key={doc.id}
+                initial={{ opacity: 0, y: 4 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ duration: 0.15 }}
+              >
+                <Card className="p-4 flex flex-col justify-between hover:shadow-md transition-shadow">
+                  <div className="flex items-start justify-between gap-3 mb-2">
+                    <div className="flex items-start gap-3 min-w-0">
+                      <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-primary-50 text-primary-600 shrink-0">
+                        <FileText className="h-4 w-4" />
+                      </div>
+                      <div className="min-w-0">
+                        <h4 className="font-semibold text-sm text-foreground truncate">{doc.title}</h4>
+                        <p className="text-xs text-foreground-muted">
+                          {formatFileSize(doc.fileSize)} • {formatRelativeTime(doc.createdAt)}
+                        </p>
+                      </div>
+                    </div>
+                    <div className="flex items-center gap-1">
+                      <button
+                        type="button"
+                        onClick={() => setEditDocTarget(doc)}
+                        className="h-7 w-7 inline-flex items-center justify-center rounded-lg text-foreground-muted hover:bg-muted hover:text-foreground transition-colors"
+                        title="Edit Document"
+                      >
+                        <Edit2 className="h-3 w-3" />
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setDeleteDocTarget(doc)}
+                        className="h-7 w-7 inline-flex items-center justify-center rounded-lg text-foreground-muted hover:bg-error-50 hover:text-error-600 transition-colors"
+                        title="Delete Document"
+                      >
+                        <Trash2 className="h-3 w-3" />
+                      </button>
+                    </div>
                   </div>
-                  <button
-                    type="button"
-                    onClick={() => setDeleteTarget(doc)}
-                    className="h-8 w-8 inline-flex items-center justify-center rounded-lg text-foreground-muted hover:bg-error-50 hover:text-error-600 transition-colors"
-                    title="Delete document"
-                    aria-label={`Delete ${doc.title}`}
-                  >
-                    <Trash2 className="h-4 w-4" />
-                  </button>
-                </div>
 
-                <h3 className="font-semibold text-foreground line-clamp-2 mb-1" title={doc.title}>
-                  {doc.title}
-                </h3>
-                <p className="text-xs text-foreground-muted mb-3">{formatFileSize(doc.fileSize)}</p>
+                  <div className="flex items-center justify-between pt-2 border-t border-border mt-2">
+                    <Badge variant="secondary" className="text-xs">
+                      {doc.documentType || 'STUDY_MATERIAL'}
+                    </Badge>
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      onClick={() => handleDownload(doc)}
+                      disabled={downloadMutation.isPending}
+                    >
+                      <Download className="h-3.5 w-3.5 mr-1" /> Download
+                    </Button>
+                  </div>
+                </Card>
+              </motion.div>
+            ))}
+          </div>
+        )}
+      </div>
 
-                <div className="flex flex-wrap gap-1.5 mb-3">
-                  <Badge variant="outline" className="text-xs">{typeLabel(doc.documentType)}</Badge>
-                  {statusBadge(doc.extractionStatus)}
-                </div>
+      <EditTopicDialog
+        open={editTopicOpen}
+        onClose={() => setEditTopicOpen(false)}
+        topic={topic}
+        subjectId={chapter?.subjectId}
+      />
 
-                <div className="mt-auto flex gap-2 pt-2">
-                  <Button asChild variant="outline" size="sm" className="flex-1">
-                    <Link to={`/study-material/${doc.id}`}>
-                      <ExternalLink className="h-4 w-4 mr-1.5" /> Open
-                    </Link>
-                  </Button>
-                  <Button asChild variant="ghost" size="sm" className="px-2" title="Download">
-                    <a href={documentApi.getDocumentFileUrl(doc.id)} target="_blank" rel="noreferrer" download={doc.fileName}>
-                      <Download className="h-4 w-4" />
-                    </a>
-                  </Button>
-                </div>
-              </Card>
-            </motion.div>
-          ))}
-        </div>
-      ) : (
-        <EmptyState
-          title="No resources for this topic yet"
-          description="Upload a study material or chapter notes PDF to make it available for students."
-          action={
-            <Button asChild>
-              <Link to="/study-material">
-                <Plus className="h-4 w-4 mr-1.5" /> Upload Study Material
-              </Link>
-            </Button>
-          }
+      <DeleteConfirmDialog
+        open={deleteTopicOpen}
+        onClose={() => setDeleteTopicOpen(false)}
+        onConfirm={handleDeleteTopic}
+        title="Delete Topic"
+        itemName={topic.name}
+        description="Are you sure you want to delete this topic?"
+        isDeleting={deleteTopicMutation.isPending}
+      />
+
+      {editDocTarget && (
+        <EditDocumentDialog
+          open={!!editDocTarget}
+          onClose={() => setEditDocTarget(null)}
+          document={editDocTarget}
         />
       )}
 
-      {deleteTarget && (
+      {deleteDocTarget && (
         <DeleteConfirmDialog
-          open={!!deleteTarget}
-          onClose={() => setDeleteTarget(null)}
-          onConfirm={handleDelete}
-          title="Delete Study Material"
-          itemName={deleteTarget.title}
-          description="This document and its extracted text will be permanently removed from the library."
-          isDeleting={deleteMutation.isPending}
+          open={!!deleteDocTarget}
+          onClose={() => setDeleteDocTarget(null)}
+          onConfirm={handleDeleteDoc}
+          title="Delete Document"
+          itemName={deleteDocTarget.title}
+          description="Are you sure you want to delete this study material? The PDF file will be removed."
+          isDeleting={deleteDocMutation.isPending}
         />
       )}
     </div>

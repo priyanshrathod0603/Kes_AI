@@ -250,6 +250,33 @@ export class PdfService {
     return doc;
   }
 
+  async updateDocMetadata(
+    id: string,
+    metadata: {
+      title?: string;
+      documentType?: string;
+      classId?: string | null;
+      subjectId?: string | null;
+      chapterId?: string | null;
+      topicId?: string | null;
+    }
+  ) {
+    const exists = await prisma.document.findUnique({ where: { id } });
+    if (!exists) throw new Error('Document not found');
+
+    return await prisma.document.update({
+      where: { id },
+      data: {
+        ...(metadata.title !== undefined ? { title: metadata.title } : {}),
+        ...(metadata.documentType !== undefined ? { documentType: metadata.documentType } : {}),
+        ...(metadata.classId !== undefined ? { schoolClassId: metadata.classId } : {}),
+        ...(metadata.subjectId !== undefined ? { subjectId: metadata.subjectId } : {}),
+        ...(metadata.chapterId !== undefined ? { chapterId: metadata.chapterId } : {}),
+        ...(metadata.topicId !== undefined ? { topicId: metadata.topicId } : {}),
+      },
+    });
+  }
+
   async deleteDoc(id: string) {
     // Get document first to delete the physical file
     const doc = await prisma.document.findUnique({

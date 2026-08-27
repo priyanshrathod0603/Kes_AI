@@ -79,3 +79,24 @@ export function useDeleteDocument() {
     },
   })
 }
+
+export function useUpdateDocument() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: ({
+      id,
+      ...params
+    }: {
+      id: string
+      title?: string
+      documentType?: string
+      classId?: string | null
+      subjectId?: string | null
+      chapterId?: string | null
+      topicId?: string | null
+    }) => documentApi.updateDocument(id, params),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['documents'] })
+    },
+  })
+}

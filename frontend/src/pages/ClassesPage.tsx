@@ -8,34 +8,35 @@ import { Card } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { PageHeader, EmptyState, ErrorState, LoadingState } from '@/components/feedback/States'
-import { CreateClassDialog, FeatureNoticeDialog } from '@/components/management'
-import { useClasses, useSubjects } from '@/hooks'
+import {
+  CreateClassDialog,
+  EditClassDialog,
+  DeleteConfirmDialog,
+} from '@/components/management'
+import { useClasses, useSubjects, useDeleteClass } from '@/hooks'
+import type { SchoolClass } from '@/types'
 
 export function ClassesPage() {
   const [createOpen, setCreateOpen] = useState(false)
-  const [noticeState, setNoticeState] = useState<{ open: boolean; title: string; feature: string } | null>(null)
+  const [editTarget, setEditTarget] = useState<SchoolClass | null>(null)
+  const [deleteTarget, setDeleteTarget] = useState<SchoolClass | null>(null)
 
   const { data: classes = [], isLoading, error, refetch } = useClasses()
   const { data: subjects = [] } = useSubjects()
+  const deleteClassMutation = useDeleteClass()
 
   const errorMessage =
     error && typeof error === 'object' && 'message' in error
       ? String((error as { message: string }).message)
       : 'Could not load classes.'
 
-  const handleUnsupportedAction = (action: 'edit' | 'delete', name: string) => {
-    if (action === 'edit') {
-      setNoticeState({
-        open: true,
-        title: 'Class Update Notice',
-        feature: `Editing "${name}"`,
-      })
-    } else {
-      setNoticeState({
-        open: true,
-        title: 'Class Deletion Notice',
-        feature: `Deleting "${name}"`,
-      })
+  const handleDelete = async () => {
+    if (!deleteTarget) return
+    try {
+      await deleteClassMutation.mutateAsync(deleteTarget.id)
+      setDeleteTarget(null)
+    } catch (err: unknown) {
+      alert(`Failed to delete class: ${(err as Error).message}`)
     }
   }
 
@@ -90,7 +91,7 @@ export function ClassesPage() {
                     <div className="flex items-center gap-1">
                       <button
                         type="button"
-                        onClick={() => handleUnsupportedAction('edit', cls.name)}
+                        onClick={() => setEditTarget(cls)}
                         className="h-8 w-8 inline-flex items-center justify-center rounded-lg text-foreground-muted hover:bg-muted hover:text-foreground transition-colors"
                         title="Edit Class"
                         aria-label={`Edit ${cls.name}`}
@@ -99,7 +100,7 @@ export function ClassesPage() {
                       </button>
                       <button
                         type="button"
-                        onClick={() => handleUnsupportedAction('delete', cls.name)}
+                        onClick={() => setDeleteTarget(cls)}
                         className="h-8 w-8 inline-flex items-center justify-center rounded-lg text-foreground-muted hover:bg-error-50 hover:text-error-600 transition-colors"
                         title="Delete Class"
                         aria-label={`Delete ${cls.name}`}
@@ -152,13 +153,23 @@ export function ClassesPage() {
         onClose={() => setCreateOpen(false)}
       />
 
-      {noticeState && (
-        <FeatureNoticeDialog
-          open={noticeState.open}
-          onClose={() => setNoticeState(null)}
-          title={noticeState.title}
-          featureName={noticeState.feature}
-          description="The backend API currently exposes class creation and querying. Update/Delete endpoints for classes are not exposed yet."
+      {editTarget && (
+        <EditClassDialog
+          open={!!editTarget}
+          onClose={() => setEditTarget(null)}
+          schoolClass={editTarget}
+        />
+      )}
+
+      {deleteTarget && (
+        <DeleteConfirmDialog
+          open={!!deleteTarget}
+          onClose={() => setDeleteTarget(null)}
+          onConfirm={handleDelete}
+          title="Delete Class"
+          itemName={deleteTarget.name}
+          description="Deleting this class will also delete its subjects, chapters, topics, and associated study materials."
+          isDeleting={deleteClassMutation.isPending}
         />
       )}
     </div>

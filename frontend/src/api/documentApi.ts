@@ -151,4 +151,19 @@ export const documentApi = {
   deleteDocument: async (id: string): Promise<void> => {
     await api.delete(`/pdf/${id}`)
   },
+
+  updateDocument: async (
+    id: string,
+    params: {
+      title?: string
+      documentType?: string
+      classId?: string | null
+      subjectId?: string | null
+      chapterId?: string | null
+      topicId?: string | null
+    }
+  ): Promise<Document> => {
+    const response = await api.put(`/pdf/${id}`, params)
+    return extractPayload<Document>(response) as Document
+  },
 }

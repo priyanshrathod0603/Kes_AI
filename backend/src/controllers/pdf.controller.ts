@@ -1,7 +1,7 @@
 import { Request, Response } from 'express';
 import { PdfService } from '../services/pdf.service';
 import { sendSuccess, sendError } from '../utils/response.utils';
-import { validate, pdfUploadSchema, pdfListQuerySchema } from '../utils/validation';
+import { validate, pdfUploadSchema, pdfListQuerySchema, updatePdfMetadataSchema } from '../utils/validation';
 import fs from 'fs';
 import { extractPdfText } from '../pdf/extraction/pdf-extraction.service';
 import path from 'path';
@@ -100,6 +100,27 @@ export const downloadPdf = async (req: Request, res: Response) => {
     return sendError(res, (error as Error).message);
   }
 };
+
+export const updatePdf = [
+  validate(updatePdfMetadataSchema),
+  async (req: Request, res: Response) => {
+    try {
+      const id = req.params.id;
+      const metadata = {
+        title: req.body.title,
+        documentType: req.body.documentType,
+        classId: req.body.classId,
+        subjectId: req.body.subjectId,
+        chapterId: req.body.chapterId,
+        topicId: req.body.topicId,
+      };
+      const updated = await pdfService.updateDocMetadata(id, metadata);
+      return sendSuccess(res, 'Document updated', { data: updated });
+    } catch (error) {
+      return sendError(res, (error as Error).message);
+    }
+  },
+];
 
 export const deletePdf = async (req: Request, res: Response) => {
   try {

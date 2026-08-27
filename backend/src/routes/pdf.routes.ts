@@ -9,6 +9,7 @@ router.get('/', PdfController.getPdfList);
 router.get('/:id', PdfController.getPdfById);
 router.get('/:id/content', PdfController.getPdfContent);
 router.get('/:id/file', PdfController.downloadPdf);
+router.put('/:id', PdfController.updatePdf);
 router.delete('/:id', PdfController.deletePdf);
 router.get('/test/extraction', PdfController.testExtraction);
 

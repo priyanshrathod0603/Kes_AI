@@ -6,10 +6,29 @@ export const createClassSchema = z.object({
   }),
 });
 
+export const updateClassSchema = z.object({
+  params: z.object({
+    id: z.string().min(1, 'Class ID is required'),
+  }),
+  body: z.object({
+    name: z.string().min(1, 'Class name is required').max(100, 'Class name too long'),
+  }),
+});
+
 export const createSubjectSchema = z.object({
   body: z.object({
     name: z.string().min(1, 'Subject name is required').max(100, 'Subject name too long'),
-    classId: z.string().uuid('Invalid class ID format'),
+    classId: z.string().min(1, 'Invalid class ID'),
+  }),
+});
+
+export const updateSubjectSchema = z.object({
+  params: z.object({
+    id: z.string().min(1, 'Subject ID is required'),
+  }),
+  body: z.object({
+    name: z.string().min(1, 'Subject name is required').max(100, 'Subject name too long'),
+    classId: z.string().min(1, 'Invalid class ID').optional(),
   }),
 });
 
@@ -17,23 +36,102 @@ export const createChapterSchema = z.object({
   body: z.object({
     name: z.string().min(1, 'Chapter name is required').max(100, 'Chapter name too long'),
     description: z.string().max(500, 'Description too long').optional(),
-    subjectId: z.string().uuid('Invalid subject ID format'),
+    subjectId: z.string().min(1, 'Invalid subject ID'),
+  }),
+});
+
+export const updateChapterSchema = z.object({
+  params: z.object({
+    id: z.string().min(1, 'Chapter ID is required'),
+  }),
+  body: z.object({
+    name: z.string().min(1, 'Chapter name is required').max(100, 'Chapter name too long'),
+    description: z.string().max(500, 'Description too long').optional(),
+    subjectId: z.string().min(1, 'Invalid subject ID').optional(),
   }),
 });
 
 export const createTopicSchema = z.object({
   body: z.object({
     name: z.string().min(1, 'Topic name is required').max(100, 'Topic name too long'),
-    chapterId: z.string().uuid('Invalid chapter ID format'),
+    chapterId: z.string().min(1, 'Invalid chapter ID'),
+  }),
+});
+
+export const updateTopicSchema = z.object({
+  params: z.object({
+    id: z.string().min(1, 'Topic ID is required'),
+  }),
+  body: z.object({
+    name: z.string().min(1, 'Topic name is required').max(100, 'Topic name too long'),
+    chapterId: z.string().min(1, 'Invalid chapter ID').optional(),
+  }),
+});
+
+export const updatePdfMetadataSchema = z.object({
+  params: z.object({
+    id: z.string().min(1, 'Document ID is required'),
+  }),
+  body: z.object({
+    title: z.string().min(1, 'Title cannot be empty').max(200, 'Title too long').optional(),
+    classId: z.string().optional().nullable(),
+    subjectId: z.string().optional().nullable(),
+    chapterId: z.string().optional().nullable(),
+    topicId: z.string().optional().nullable(),
+    documentType: z.enum(['CHAPTER_MATERIAL', 'WORKSHEET', 'QUESTION_PAPER', 'ANSWER_KEY', 'STUDY_MATERIAL']).optional(),
+  }),
+});
+
+export const createQuizSchema = z.object({
+  body: z.object({
+    title: z.string().min(1, 'Quiz title is required').max(200, 'Title too long'),
+    description: z.string().max(1000).optional().nullable(),
+    subjectId: z.string().optional().nullable(),
+    chapterId: z.string().optional().nullable(),
+    questions: z.array(
+      z.object({
+        questionText: z.string().min(1, 'Question text is required'),
+        optionA: z.string().min(1, 'Option A is required'),
+        optionB: z.string().min(1, 'Option B is required'),
+        optionC: z.string().min(1, 'Option C is required'),
+        optionD: z.string().min(1, 'Option D is required'),
+        correctOption: z.enum(['A', 'B', 'C', 'D']),
+        explanation: z.string().optional().nullable(),
+      })
+    ).optional(),
+  }),
+});
+
+export const updateQuizSchema = z.object({
+  params: z.object({
+    id: z.string().min(1, 'Quiz ID is required'),
+  }),
+  body: z.object({
+    title: z.string().min(1, 'Quiz title is required').max(200, 'Title too long').optional(),
+    description: z.string().max(1000).optional().nullable(),
+    subjectId: z.string().optional().nullable(),
+    chapterId: z.string().optional().nullable(),
+    questions: z.array(
+      z.object({
+        id: z.string().optional(),
+        questionText: z.string().min(1, 'Question text is required'),
+        optionA: z.string().min(1, 'Option A is required'),
+        optionB: z.string().min(1, 'Option B is required'),
+        optionC: z.string().min(1, 'Option C is required'),
+        optionD: z.string().min(1, 'Option D is required'),
+        correctOption: z.enum(['A', 'B', 'C', 'D']),
+        explanation: z.string().optional().nullable(),
+      })
+    ).optional(),
   }),
 });
 
 export const pdfUploadSchema = z.object({
   body: z.object({
-    classId: z.string().uuid('Invalid class ID format').optional(),
-    subjectId: z.string().uuid('Invalid subject ID format').optional(),
-    chapterId: z.string().uuid('Invalid chapter ID format').optional(),
-    topicId: z.string().uuid('Invalid topic ID format').optional(),
+    classId: z.string().optional(),
+    subjectId: z.string().optional(),
+    chapterId: z.string().optional(),
+    topicId: z.string().optional(),
     documentType: z.enum(['CHAPTER_MATERIAL', 'WORKSHEET', 'QUESTION_PAPER', 'ANSWER_KEY', 'STUDY_MATERIAL'], {
       errorMap: () => ({ message: 'Invalid document type' }),
     }).optional(),
@@ -42,10 +140,10 @@ export const pdfUploadSchema = z.object({
 
 export const pdfListQuerySchema = z.object({
   query: z.object({
-    classId: z.string().uuid('Invalid class ID format').optional(),
-    subjectId: z.string().uuid('Invalid subject ID format').optional(),
-    chapterId: z.string().uuid('Invalid chapter ID format').optional(),
-    topicId: z.string().uuid('Invalid topic ID format').optional(),
+    classId: z.string().optional(),
+    subjectId: z.string().optional(),
+    chapterId: z.string().optional(),
+    topicId: z.string().optional(),
     documentType: z.enum(['CHAPTER_MATERIAL', 'WORKSHEET', 'QUESTION_PAPER', 'ANSWER_KEY', 'STUDY_MATERIAL'], {
       errorMap: () => ({ message: 'Invalid document type' }),
     }).optional(),

@@ -105,3 +105,36 @@ model Document {
   @@index([topicId])
   @@index([extractionStatus])
 }
+
+model Quiz {
+  id          String   @id @default(uuid())
+  title       String
+  description String?
+  subjectId   String?
+  chapterId   String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  questions   QuizQuestion[]
+
+  @@index([subjectId])
+  @@index([chapterId])
+}
+
+model QuizQuestion {
+  id            String   @id @default(uuid())
+  quizId        String
+  questionText  String
+  optionA       String
+  optionB       String
+  optionC       String
+  optionD       String
+  correctOption String   // "A" | "B" | "C" | "D"
+  explanation   String?
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  quiz Quiz @relation(fields: [quizId], references: [id], onDelete: Cascade)
+
+  @@index([quizId])
+}

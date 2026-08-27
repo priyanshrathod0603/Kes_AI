@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useRef, useState, useCallback, type FormEvent, type KeyboardEvent } from 'react'
+import { useEffect, useRef, useState, useCallback, useMemo, type FormEvent, type KeyboardEvent } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 import {
   Send,
@@ -26,7 +26,7 @@ import { Markdown } from '@/components/ui/markdown'
 import { useAIChat, useClasses, useSubjects, useChapters, useTopics } from '@/hooks'
 import { cn } from '@/lib/utils'
 import { QUICK_PROMPTS } from '@/lib/constants'
-import type { ApiError } from '@/types'
+import type { ApiError, SchoolClass, Subject, Chapter, Topic } from '@/types'
 
 interface Message {
   id: string
@@ -101,9 +101,22 @@ export function AITutorPage() {
   const [topicId, setTopicId] = useState('')
 
   const { data: classes = [], isLoading: classesLoading, error: classesError } = useClasses()
-  const { data: subjects = [] } = useSubjects(classId ? { classId } : undefined, { enabled: !!classId })
-  const { data: chapters = [] } = useChapters(subjectId ? { subjectId } : undefined, { enabled: !!subjectId })
-  const { data: topics = [] } = useTopics(chapterId ? { chapterId } : undefined, { enabled: !!chapterId })
+  const { data: allSubjects = [] } = useSubjects()
+  const { data: allChapters = [] } = useChapters()
+  const { data: allTopics = [] } = useTopics()
+
+  const subjects = useMemo(
+    () => allSubjects.filter((s: Subject) => !classId || s.classId === classId),
+    [allSubjects, classId]
+  )
+  const chapters = useMemo(
+    () => allChapters.filter((c: Chapter) => !subjectId || c.subjectId === subjectId),
+    [allChapters, subjectId]
+  )
+  const topics = useMemo(
+    () => allTopics.filter((t: Topic) => !chapterId || t.chapterId === chapterId),
+    [allTopics, chapterId]
+  )
 
   const ai = useAIChat()
   const scrollRef = useRef<HTMLDivElement>(null)
@@ -118,10 +131,10 @@ export function AITutorPage() {
   }, [messages])
 
   const buildSystemPrompt = useCallback(() => {
-    const className = classes.find((c) => c.id === classId)?.name
-    const subjectName = subjects.find((s) => s.id === subjectId)?.name
-    const chapterName = chapters.find((c) => c.id === chapterId)?.name
-    const topicName = topics.find((t) => t.id === topicId)?.name
+    const className = classes.find((c: SchoolClass) => c.id === classId)?.name
+    const subjectName = subjects.find((s: Subject) => s.id === subjectId)?.name
+    const chapterName = chapters.find((c: Chapter) => c.id === chapterId)?.name
+    const topicName = topics.find((t: Topic) => t.id === topicId)?.name
     const bits: string[] = []
     if (className) bits.push(`Class: ${className}`)
     if (subjectName) bits.push(`Subject: ${subjectName}`)
@@ -155,7 +168,10 @@ export function AITutorPage() {
       if (textareaRef.current) textareaRef.current.style.height = 'auto'
 
       try {
-        const data = await ai.sendMessage(text)
+        const data = await ai.sendMessage({
+          prompt: text,
+          systemPrompt: buildSystemPrompt(),
+        })
         setMessages((prev) =>
           prev.map((m) =>
             m.id === pendingId
@@ -174,7 +190,7 @@ export function AITutorPage() {
         )
       }
     },
-    [ai, input]
+    [ai, input, buildSystemPrompt]
   )
 
   const retry = useCallback(

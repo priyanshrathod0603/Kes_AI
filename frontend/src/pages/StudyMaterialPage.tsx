@@ -38,7 +38,7 @@ import {
   DropdownMenuSeparator,
 } from '@/components/ui/dropdown-menu'
 import { PageHeader, EmptyState, ErrorState, LoadingState } from '@/components/feedback/States'
-import { DeleteConfirmDialog, FeatureNoticeDialog } from '@/components/management'
+import { DeleteConfirmDialog, EditDocumentDialog } from '@/components/management'
 import {
   useDocuments,
   useUploadDocument,
@@ -114,7 +114,7 @@ export function StudyMaterialPage() {
   const [view, setView] = useState<'grid' | 'list'>('grid')
   const [uploadOpen, setUploadOpen] = useState(false)
   const [deleteTarget, setDeleteTarget] = useState<Document | null>(null)
-  const [editNoticeTarget, setEditNoticeTarget] = useState<Document | null>(null)
+  const [editTarget, setEditTarget] = useState<Document | null>(null)
   const [page, setPage] = useState(1)
   const limit = 20
 
@@ -394,7 +394,7 @@ export function StudyMaterialPage() {
                 chapter={chapterName(doc.chapterId)}
                 topic={topicName(doc.topicId)}
                 onDelete={() => setDeleteTarget(doc)}
-                onEdit={() => setEditNoticeTarget(doc)}
+                onEdit={() => setEditTarget(doc)}
               />
             </motion.div>
           ))}
@@ -410,7 +410,7 @@ export function StudyMaterialPage() {
               chapter={chapterName(doc.chapterId)}
               topic={topicName(doc.topicId)}
               onDelete={() => setDeleteTarget(doc)}
-              onEdit={() => setEditNoticeTarget(doc)}
+              onEdit={() => setEditTarget(doc)}
             />
           ))}
         </Card>
@@ -462,14 +462,12 @@ export function StudyMaterialPage() {
         />
       )}
 
-      {/* Edit Notice Dialog */}
-      {editNoticeTarget && (
-        <FeatureNoticeDialog
-          open={!!editNoticeTarget}
-          onClose={() => setEditNoticeTarget(null)}
-          title="Document Edit Notice"
-          featureName={`Editing metadata for "${editNoticeTarget.title}"`}
-          description="The backend API does not currently expose a metadata update endpoint for documents. You can delete and re-upload the document with updated tags."
+      {/* Edit Document Dialog */}
+      {editTarget && (
+        <EditDocumentDialog
+          open={!!editTarget}
+          onClose={() => setEditTarget(null)}
+          document={editTarget}
         />
       )}
     </div>

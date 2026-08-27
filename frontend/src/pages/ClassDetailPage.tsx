@@ -7,21 +7,26 @@ import { motion } from 'framer-motion'
 import { Card } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { PageHeader, EmptyState, ErrorState, LoadingState } from '@/components/feedback/States'
-import { CreateSubjectDialog, FeatureNoticeDialog } from '@/components/management'
-import { useClasses, useSubjects } from '@/hooks'
+import {
+  CreateSubjectDialog,
+  EditSubjectDialog,
+  DeleteConfirmDialog,
+} from '@/components/management'
+import { useClasses, useSubjects, useDeleteSubject } from '@/hooks'
+import type { Subject } from '@/types'
 
 export function ClassDetailPage() {
   const { id } = useParams<{ id: string }>()
   const [createSubjectOpen, setCreateSubjectOpen] = useState(false)
-  const [noticeState, setNoticeState] = useState<{ open: boolean; title: string; feature: string } | null>(null)
+  const [editTarget, setEditTarget] = useState<Subject | null>(null)
+  const [deleteTarget, setDeleteTarget] = useState<Subject | null>(null)
 
   const { data: classes = [], isLoading: classesLoading, error: classesError } = useClasses()
-  const { data: subjects = [], isLoading: subjectsLoading, error: subjectsError } = useSubjects(
-    id ? { classId: id } : undefined,
-    { enabled: !!id }
-  )
+  const { data: allSubjects = [], isLoading: subjectsLoading, error: subjectsError } = useSubjects()
+  const deleteSubjectMutation = useDeleteSubject()
 
   const cls = classes.find((c) => c.id === id)
+  const subjects = allSubjects.filter((s) => s.classId === id)
 
   if (classesLoading || subjectsLoading) return <LoadingState label="Loading class…" />
 
@@ -47,19 +52,13 @@ export function ClassDetailPage() {
     )
   }
 
-  const handleUnsupportedAction = (action: 'edit' | 'delete', name: string) => {
-    if (action === 'edit') {
-      setNoticeState({
-        open: true,
-        title: 'Subject Update Notice',
-        feature: `Editing "${name}"`,
-      })
-    } else {
-      setNoticeState({
-        open: true,
-        title: 'Subject Deletion Notice',
-        feature: `Deleting "${name}"`,
-      })
+  const handleDelete = async () => {
+    if (!deleteTarget) return
+    try {
+      await deleteSubjectMutation.mutateAsync(deleteTarget.id)
+      setDeleteTarget(null)
+    } catch (err: unknown) {
+      alert(`Failed to delete subject: ${(err as Error).message}`)
     }
   }
 
@@ -109,7 +108,7 @@ export function ClassDetailPage() {
                   <div className="flex items-center gap-1">
                     <button
                       type="button"
-                      onClick={() => handleUnsupportedAction('edit', s.name)}
+                      onClick={() => setEditTarget(s)}
                       className="h-8 w-8 inline-flex items-center justify-center rounded-lg text-foreground-muted hover:bg-muted hover:text-foreground transition-colors"
                       title="Edit Subject"
                       aria-label={`Edit ${s.name}`}
@@ -118,7 +117,7 @@ export function ClassDetailPage() {
                     </button>
                     <button
                       type="button"
-                      onClick={() => handleUnsupportedAction('delete', s.name)}
+                      onClick={() => setDeleteTarget(s)}
                       className="h-8 w-8 inline-flex items-center justify-center rounded-lg text-foreground-muted hover:bg-error-50 hover:text-error-600 transition-colors"
                       title="Delete Subject"
                       aria-label={`Delete ${s.name}`}
@@ -147,13 +146,23 @@ export function ClassDetailPage() {
         defaultClassId={cls.id}
       />
 
-      {noticeState && (
-        <FeatureNoticeDialog
-          open={noticeState.open}
-          onClose={() => setNoticeState(null)}
-          title={noticeState.title}
-          featureName={noticeState.feature}
-          description="The backend API currently exposes subject creation and querying. Update/Delete endpoints for subjects are not exposed yet."
+      {editTarget && (
+        <EditSubjectDialog
+          open={!!editTarget}
+          onClose={() => setEditTarget(null)}
+          subject={editTarget}
+        />
+      )}
+
+      {deleteTarget && (
+        <DeleteConfirmDialog
+          open={!!deleteTarget}
+          onClose={() => setDeleteTarget(null)}
+          onConfirm={handleDelete}
+          title="Delete Subject"
+          itemName={deleteTarget.name}
+          description="Deleting this subject will also delete its chapters, topics, and associated study materials."
+          isDeleting={deleteSubjectMutation.isPending}
         />
       )}
     </div>
